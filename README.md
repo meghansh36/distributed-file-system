@@ -1,4 +1,4 @@
-# AwesomeSDFS
+# AwesomeFailureDetector
 
 
 
@@ -15,14 +15,14 @@ Already a pro? Just edit this README.md and make it your own. Want to make it ea
 
 ```
 cd existing_repo
-git remote add origin https://gitlab.engr.illinois.edu/mgoel7/awesomesdfs.git
+git remote add origin https://gitlab.engr.illinois.edu/mgoel7/awesomefailuredetector.git
 git branch -M main
 git push -uf origin main
 ```
 
 ## Integrate with your tools
 
-- [ ] [Set up project integrations](https://gitlab.engr.illinois.edu/mgoel7/awesomesdfs/-/settings/integrations)
+- [ ] [Set up project integrations](https://gitlab.engr.illinois.edu/mgoel7/awesomefailuredetector/-/settings/integrations)
 
 ## Collaborate with your team
 
