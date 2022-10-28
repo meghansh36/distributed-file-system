@@ -25,6 +25,7 @@ class Worker:
         self.waiting_for_introduction = True
         self.total_pings_send = 0
         self.total_ack_missed = 0
+        self.missed_acks_count = {}
 
     def initialize(self, config: Config) -> None:
         """Function to initialize all the required class for Worker"""
@@ -67,6 +68,7 @@ class Worker:
                 if curr_node:
                     self.waiting_for_introduction = False
                     self.membership_list.update(packet.data)
+                    self.missed_acks_count[curr_node] = 0
                     self._notify_waiting(curr_node)
 
             elif packet.type == PacketType.PING or packet.type == PacketType.INTRODUCE:
@@ -85,17 +87,28 @@ class Worker:
             # print(f'{datetime.now()}: failed to recieve ACK from {node.unique_name}')
             self.total_ack_missed += 1
             if not self.waiting_for_introduction:
-                logging.debug(f'failed to recieve ACK from {node.unique_name}')
-                self.membership_list.update_node_status(node=node, status=0)
+                if node in self.missed_acks_count:
+                    self.missed_acks_count[node] += 1
+                else:
+                    self.missed_acks_count[node] = 1
+                
+                logging.error(f'failed to recieve ACK from {node.unique_name} for {self.missed_acks_count[node]} times')
+                if self.missed_acks_count[node] > 3:
+                    self.membership_list.update_node_status(node=node, status=0)
             else:
                 logging.debug(f'failed to recieve ACK from Introducer')
         except Exception as e:
             self.total_ack_missed += 1
             # print(f'{datetime.now()}: Exception when waiting for ACK from {node.unique_name}: {e}')
             if not self.waiting_for_introduction:
-                logging.debug(
-                    f'Exception when waiting for ACK from {node.unique_name}: {e}')
-                self.membership_list.update_node_status(node=node, status=0)
+                if node in self.missed_acks_count:
+                    self.missed_acks_count[node] += 1
+                else:
+                    self.missed_acks_count[node] = 1
+
+                logging.error(f'Exception when waiting for ACK from {node.unique_name} for {self.missed_acks_count[node]} times: {e}')
+                if self.missed_acks_count[node] > 3:
+                    self.membership_list.update_node_status(node=node, status=0)
             else:
                 logging.debug(
                     f'Exception when waiting for ACK from introducer: {e}')

@@ -89,6 +89,8 @@ class MemberShipList:
         for key in new_membership_list.keys():
             new_time, new_status = new_membership_list[key]
             if key in self.memberShipListDict:
+                if key == self.itself.unique_name:
+                    continue
                 curr_time, curr_status = self.memberShipListDict[key]
                 if curr_time < new_time:
                     if curr_status == 0 and new_status == 1:
