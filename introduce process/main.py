@@ -2,7 +2,6 @@ import asyncio
 from contextlib import AsyncExitStack, suppress
 import signal
 from typing import List, Optional
-from nodes import Node
 from transport import UdpTransport
 import getopt
 import sys
@@ -28,28 +27,26 @@ async def run(config: Config) -> None:
 def parse_cmdline_args(arguments: List[str]) -> Config:
     """Parse cmdline options"""
     hostname: str = '127.0.0.1'
-    port: int = 8001
+    port: int = 8888
     conf: Optional[Config] = None
     introducer: str = None
     testing: bool = False
 
     try:
-        opts, args = getopt.getopt(arguments, "h:p:t", [
+        opts, args = getopt.getopt(arguments, "h:p", [
             "hostname=", "port=", "help="])
 
         for opt, arg in opts:
             if opt == '--help':
                 print(
-                    'failure_detector.py -h <hostname> -p <port> -t')
+                    'introduce.py -h <hostname> -p <port>')
                 sys.exit()
             elif opt in ("-h", "--hostname"):
                 hostname = arg
             elif opt in ("-p", "--port"):
                 port = int(arg)
-            elif opt in ("-t"):
-                testing = True
 
-        conf = Config(hostname, port, testing)
+        conf = Config(hostname, port)
 
     except getopt.GetoptError:
         logging.error(

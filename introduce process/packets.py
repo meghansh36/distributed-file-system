@@ -5,7 +5,6 @@ import struct
 import json
 from typing import Optional
 
-
 class PacketType(str, Enum):
     """Current packet types supported by failure detector"""
     PING = "000"

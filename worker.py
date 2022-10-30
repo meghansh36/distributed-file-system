@@ -11,7 +11,7 @@ from nodes import Node
 from packets import Packet, PacketType
 from protocol import AwesomeProtocol
 from membershipList import MemberShipList
-
+from leader import Leader
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -30,7 +30,17 @@ class Worker:
     def initialize(self, config: Config) -> None:
         """Function to initialize all the required class for Worker"""
         self.config = config
-        self.waiting_for_introduction = False if self.config.introducerFlag else True
+        # self.waiting_for_introduction = False if self.config.introducerFlag else True
+        self.leaderFlag = False
+        self.leaderObj = None
+        self.leaderNode: Node= None
+        self.fetchingIntroducerFlag = True
+        # if self.config.introducerFlag:
+        #     self.leaderObj = Leader(self.config.node)
+        #     self.leaderFlag = True
+        #     self.leaderNode = self.config.node.unique_name
+
+
         self.membership_list = MemberShipList(
             self.config.node, self.config.ping_nodes)
         self.io.testing = config.testing
@@ -61,24 +71,54 @@ class Worker:
 
             logging.debug(f'got data: {packet.data} from {host}:{port}')
 
-            if packet.type == PacketType.ACK:
+            if packet.type == PacketType.ACK or packet.type == PacketType.INTRODUCE_ACK:
                 curr_node: Node = Config.get_node_from_unique_name(
                     packet.sender)
                 logging.debug(f'got ack from {curr_node.unique_name}')
                 if curr_node:
+
+                    if packet.type == PacketType.ACK:
+                        self.membership_list.update(packet.data)
+                    else:
+                        self.membership_list.update(packet.data['membership_list'])
+                        leader = packet.data['leader']
+                        self.leaderNode = Node(leader.split(':')[0], int(leader.split(':')[1]))
+
+
                     self.waiting_for_introduction = False
-                    self.membership_list.update(packet.data)
+                    # self.membership_list.update(packet.data)
                     self.missed_acks_count[curr_node] = 0
                     self._notify_waiting(curr_node)
+
+            elif packet.type == PacketType.FETCH_INTRODUCER_ACK:
+                logging.debug(f'got fetch introducer ack from {self.config.introducerDNSNode.unique_name}')
+                introducer = packet.data['introducer']
+                if introducer == self.config.node.unique_name:
+                    self.leaderObj = Leader(self.config.node)
+                    self.leaderFlag = True
+                    self.leaderNode = self.config.node
+                    self.waiting_for_introduction = False
+                    print("I BECAME THE LEADER ", self.leaderNode.unique_name)
+                else:
+                    self.leaderNode = Node(introducer.split(':')[0], int(introducer.split(':')[1]))
+                    print("MY NEW LEADER IS", self.leaderNode.unique_name)
+
+                self.fetchingIntroducerFlag = False
+                print('setting fetch introducer flag to FALSE', self.fetchingIntroducerFlag)
+                self._notify_waiting(self.config.introducerDNSNode)
 
             elif packet.type == PacketType.PING or packet.type == PacketType.INTRODUCE:
                 # print(f'{datetime.now()}: received ping from {host}:{port}')
                 self.membership_list.update(packet.data)
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.ACK, self.membership_list.get()).pack())
 
+
+
+
     async def _wait(self, node: Node, timeout: float) -> bool:
         """Function to wait for ACKs after PINGs"""
         event = Event()
+        print("adding wait to ", node.unique_name)
         self._add_waiting(node, event)
 
         try:
@@ -86,7 +126,7 @@ class Worker:
         except exceptions.TimeoutError:
             # print(f'{datetime.now()}: failed to recieve ACK from {node.unique_name}')
             self.total_ack_missed += 1
-            if not self.waiting_for_introduction:
+            if not self.waiting_for_introduction and not self.fetchingIntroducerFlag:
                 if node in self.missed_acks_count:
                     self.missed_acks_count[node] += 1
                 else:
@@ -96,11 +136,12 @@ class Worker:
                 if self.missed_acks_count[node] > 3:
                     self.membership_list.update_node_status(node=node, status=0)
             else:
-                logging.debug(f'failed to recieve ACK from Introducer')
+                logging.error(f'failed to recieve ACK from {node.unique_name}')
+                self.fetchingIntroducerFlag = True
         except Exception as e:
             self.total_ack_missed += 1
             # print(f'{datetime.now()}: Exception when waiting for ACK from {node.unique_name}: {e}')
-            if not self.waiting_for_introduction:
+            if not self.waiting_for_introduction and not self.fetchingIntroducerFlag:
                 if node in self.missed_acks_count:
                     self.missed_acks_count[node] += 1
                 else:
@@ -110,7 +151,7 @@ class Worker:
                 if self.missed_acks_count[node] > 3:
                     self.membership_list.update_node_status(node=node, status=0)
             else:
-                logging.debug(
+                logging.error(
                     f'Exception when waiting for ACK from introducer: {e}')
 
         return event.is_set()
@@ -118,9 +159,15 @@ class Worker:
     async def introduce(self) -> None:
         """FUnction to ask introducer to introduce"""
         logging.debug(
-            f'sending pings to introducer: {self.config.introducerNode.unique_name}')
-        await self.io.send(self.config.introducerNode.host, self.config.introducerNode.port, Packet(self.config.node.unique_name, PacketType.INTRODUCE, self.membership_list.get()).pack())
-        await self._wait(self.config.introducerNode, PING_TIMEOOUT)
+            f'sending pings to introducer: {self.leaderNode.unique_name}')
+        await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.INTRODUCE, self.membership_list.get()).pack())
+        await self._wait(self.leaderNode, PING_TIMEOOUT)
+
+    async def fetch_introducer(self) -> None:
+        logging.debug(f'sending pings to introducer DNS: {self.config.introducerDNSNode.unique_name}')
+        print('sending ping to fetch introducer')
+        await self.io.send(self.config.introducerDNSNode.host, self.config.introducerDNSNode.port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER, {}).pack())
+        await self._wait(self.config.introducerDNSNode, PING_TIMEOOUT)
 
     async def check(self, node: Node) -> None:
         """Fucntion to send PING to a node"""
@@ -138,7 +185,13 @@ class Worker:
                         asyncio.create_task(self.check(node))
                 else:
                     self.total_pings_send += 1
-                    asyncio.create_task(self.introduce())
+                    print(self.fetchingIntroducerFlag)
+                    if self.fetchingIntroducerFlag:
+                        asyncio.create_task(self.fetch_introducer())
+                    print(self.waiting_for_introduction, self.fetchingIntroducerFlag)
+                    if self.waiting_for_introduction and not self.fetchingIntroducerFlag:
+                        print('i entered here now')
+                        asyncio.create_task(self.introduce())
 
             await asyncio.sleep(PING_DURATION)
 
