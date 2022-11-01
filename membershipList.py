@@ -3,6 +3,7 @@ from typing import List
 from nodes import Node
 import time
 from nodes import Node
+from globalClass import Global
 
 import logging
 
@@ -12,7 +13,8 @@ from config import CLEANUP_TIME, M, GLOBAL_RING_TOPOLOGY, Config
 class MemberShipList:
     """Class to maintain Local membership list"""
 
-    def __init__(self, node: Node, ping_nodes: List[Node]):
+    def __init__(self, node: Node, ping_nodes: List[Node], globalObj: Global):
+        self.globalObj = globalObj
         self.memberShipListDict = {}
         self.itself: Node = node
         self.current_pinging_nodes: List[Node] = ping_nodes
@@ -33,6 +35,9 @@ class MemberShipList:
                     keys_for_cleanup.append(key)
 
         for key_for_cleanup in keys_for_cleanup:
+            if key == self.itself.unique_name and not self.globalObj.worker.electionPhase:
+                self.globalObj.worker.initiate_election()
+
             del self.memberShipListDict[key_for_cleanup]
             self._nodes_cleaned.add(key_for_cleanup)
 

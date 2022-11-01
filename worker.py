@@ -12,6 +12,8 @@ from packets import Packet, PacketType
 from protocol import AwesomeProtocol
 from membershipList import MemberShipList
 from leader import Leader
+from globalClass import Global
+from election import Election
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -27,14 +29,18 @@ class Worker:
         self.total_ack_missed = 0
         self.missed_acks_count = {}
 
-    def initialize(self, config: Config) -> None:
+    def initialize(self, config: Config, globalObj: Global) -> None:
         """Function to initialize all the required class for Worker"""
         self.config = config
+        globalObj.set_worker(self)
+        self.globalObj = globalObj
+        self.globalObj.set_election(Election(globalObj))
         # self.waiting_for_introduction = False if self.config.introducerFlag else True
         self.leaderFlag = False
         self.leaderObj = None
         self.leaderNode: Node= None
         self.fetchingIntroducerFlag = True
+        self.electionPhase = False
         # if self.config.introducerFlag:
         #     self.leaderObj = Leader(self.config.node)
         #     self.leaderFlag = True
@@ -42,7 +48,8 @@ class Worker:
 
 
         self.membership_list = MemberShipList(
-            self.config.node, self.config.ping_nodes)
+            self.config.node, self.config.ping_nodes, globalObj)
+        
         self.io.testing = config.testing
 
     def _add_waiting(self, node: Node, event: Event) -> None:
@@ -94,9 +101,11 @@ class Worker:
                 logging.debug(f'got fetch introducer ack from {self.config.introducerDNSNode.unique_name}')
                 introducer = packet.data['introducer']
                 if introducer == self.config.node.unique_name:
-                    self.leaderObj = Leader(self.config.node)
+                    self.leaderObj = Leader(self.config.node, self.globalObj)
+                    self.globalObj.set_leader(self.leaderObj)
                     self.leaderFlag = True
                     self.leaderNode = self.config.node
+                    print("if this workssss", self.globalObj.worker.total_pings_send)
                     self.waiting_for_introduction = False
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:

@@ -9,6 +9,7 @@ import sys
 from worker import Worker
 from config import Config
 import logging
+from globalClass import Global
 
 
 async def run(config: Config) -> None:
@@ -18,7 +19,8 @@ async def run(config: Config) -> None:
         stack.enter_context(suppress(asyncio.CancelledError))
         tranport = UdpTransport(config.node.host, config.node.port)
         worker: Worker = await stack.enter_async_context(tranport.enter())
-        worker.initialize(config)
+        globalObj = Global()
+        worker.initialize(config, globalObj)
         task = asyncio.create_task(worker.run())
         loop.add_signal_handler(signal.SIGINT, task.cancel)
         loop.add_signal_handler(signal.SIGTERM, task.cancel)
