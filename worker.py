@@ -14,6 +14,7 @@ from membershipList import MemberShipList
 from leader import Leader
 from globalClass import Global
 from election import Election
+from file_service import FileService
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -28,6 +29,7 @@ class Worker:
         self.total_pings_send = 0
         self.total_ack_missed = 0
         self.missed_acks_count = {}
+        self.file_service = FileService()
 
     def initialize(self, config: Config, globalObj: Global) -> None:
         """Function to initialize all the required class for Worker"""
@@ -50,6 +52,24 @@ class Worker:
             self.config.node, self.config.ping_nodes, globalObj)
         
         self.io.testing = config.testing
+
+    async def put_file(self, req_node: Node, host, username, password, file_location):
+
+        # get destination file location for this file
+
+        status = await self.file_service.download_file(host=host, username=username, password=password, file_location=file_location, dest_location='./sdfs/')
+        if status:
+            logging.debug(f'successfully downloaded file {file_location} from {host} requested by {req_node.unique_name}')
+            # download success sending sucess back to requester
+            # TODO design a sucess dict to indicate download success
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.CMD, {}).pack())
+            # TODO send the success message to leader about all its local files
+            # TODO call fileservice save to re-organize files
+        else:
+            logging.error(f'Failed to download file {file_location} from {host} requested by {req_node.unique_name}')
+            # download failed sending failure message back to requester
+            # TODO design a failure dict to indicate download failure
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.CMD, {}).pack())
 
     def _add_waiting(self, node: Node, event: Event) -> None:
         """Function to keep track of all the unresponsive PINGs"""
@@ -142,8 +162,20 @@ class Worker:
                     # self.globalObj.set_leader(self.leaderObj)
                     # self.leaderFlag = True
                     # self.leaderNode = self.config.node
-
-
+            
+            elif packet.type == PacketType.CMD:
+                # parse packet and get all the required fields to download a file
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    if 'cmd_type' in data and data["cmd_type"] == "DOWNLOAD_FILE":
+                        machine_hostname = data["hostname"]
+                        machine_username = data["username"]
+                        machine_password = data["password"]
+                        machine_file_location = data["file_path"]
+                        machine_filename = data["filename"]
+                        print(f"request from {curr_node.host}:{curr_node.port} to download file from {machine_username}@{machine_hostname}:{machine_file_location}")
+                        asyncio.create_task(self.put_file(curr_node, machine_hostname, machine_username, machine_password, machine_file_location))
 
     async def _wait(self, node: Node, timeout: float) -> bool:
         """Function to wait for ACKs after PINGs"""
