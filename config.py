@@ -12,6 +12,9 @@ CLEANUP_TIME: final = 10
 INTRODUCER_DNS_HOST = "127.0.0.1"
 INTRODUCER_DNS_PORT = 8888
 
+USERNAME = 'meghansh'
+PASSWORD = 'Toshiba@1234'
+
 H1: final = Node('127.0.0.1', 8001, 'H1')
 H2: final = Node('127.0.0.1', 8002, 'H2')
 H3: final = Node('127.0.0.1', 8003, 'H3')
@@ -98,6 +101,7 @@ class Config:
 
         return member
 
+    @staticmethod
     def get_node_from_unique_name(unique_name: str) -> Node:
         """Return class Node which matches unique name"""
         member = None
@@ -107,3 +111,11 @@ class Config:
                 break
 
         return member
+
+    @staticmethod
+    def get_node_from_id(id: str):
+        for node in GLOBAL_RING_TOPOLOGY.keys():
+            if node.name == id:
+                return node
+        
+        return None

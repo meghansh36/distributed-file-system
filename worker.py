@@ -6,7 +6,7 @@ from asyncio import Event, exceptions
 from time import time
 from weakref import WeakSet, WeakKeyDictionary
 from typing import final, Final, NoReturn, Optional
-from config import GLOBAL_RING_TOPOLOGY, Config, PING_TIMEOOUT, PING_DURATION
+from config import GLOBAL_RING_TOPOLOGY, Config, PING_TIMEOOUT, PING_DURATION, USERNAME, PASSWORD
 from nodes import Node
 from packets import Packet, PacketType
 from protocol import AwesomeProtocol
@@ -30,6 +30,7 @@ class Worker:
         self.total_ack_missed = 0
         self.missed_acks_count = {}
         self.file_service = FileService()
+        self.file_status = {}
 
     def initialize(self, config: Config, globalObj: Global) -> None:
         """Function to initialize all the required class for Worker"""
@@ -39,7 +40,7 @@ class Worker:
         self.globalObj.set_election(Election(globalObj))
         # self.waiting_for_introduction = False if self.config.introducerFlag else True
         self.leaderFlag = False
-        self.leaderObj = None
+        self.leaderObj: Leader = None
         self.leaderNode: Node= None
         self.fetchingIntroducerFlag = True
         # if self.config.introducerFlag:
@@ -62,14 +63,14 @@ class Worker:
             logging.debug(f'successfully downloaded file {file_location} from {host} requested by {req_node.unique_name}')
             # download success sending sucess back to requester
             # TODO design a sucess dict to indicate download success
-            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.CMD, {}).pack())
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_SUCCESS, {}).pack())
             # TODO send the success message to leader about all its local files
             # TODO call fileservice save to re-organize files
         else:
             logging.error(f'Failed to download file {file_location} from {host} requested by {req_node.unique_name}')
             # download failed sending failure message back to requester
             # TODO design a failure dict to indicate download failure
-            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.CMD, {}).pack())
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_FAIL, {}).pack())
 
     def _add_waiting(self, node: Node, event: Event) -> None:
         """Function to keep track of all the unresponsive PINGs"""
@@ -108,7 +109,7 @@ class Worker:
                     else:
                         self.membership_list.update(packet.data['membership_list'])
                         leader = packet.data['leader']
-                        self.leaderNode = Node(leader.split(':')[0], int(leader.split(':')[1]))
+                        self.leaderNode = Config.get_node_from_unique_name(leader)
 
                     self.waiting_for_introduction = False
                     # self.membership_list.update(packet.data)
@@ -126,7 +127,7 @@ class Worker:
                     self.waiting_for_introduction = False
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:
-                    self.leaderNode = Node(introducer.split(':')[0], int(introducer.split(':')[1]))
+                    self.leaderNode = Config.get_node_from_unique_name(introducer)
                     print("MY NEW LEADER IS", self.leaderNode.unique_name)
 
                 self.fetchingIntroducerFlag = False
@@ -149,7 +150,7 @@ class Worker:
             
             elif packet.type == PacketType.COORDINATE:
                 self.globalObj.election.electionPhase = False
-                self.leaderNode = Node(host, port)
+                self.leaderNode = Config.get_node_from_unique_name(host + ":" + port)
                 print('MY NEW LEADER IS', host, port)
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, {}).pack())
             
@@ -163,19 +164,27 @@ class Worker:
                     # self.leaderFlag = True
                     # self.leaderNode = self.config.node
             
-            elif packet.type == PacketType.CMD:
+            elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
                     if 'cmd_type' in data and data["cmd_type"] == "DOWNLOAD_FILE":
                         machine_hostname = data["hostname"]
-                        machine_username = data["username"]
-                        machine_password = data["password"]
+                        machine_username = USERNAME
+                        machine_password = PASSWORD
                         machine_file_location = data["file_path"]
                         machine_filename = data["filename"]
                         print(f"request from {curr_node.host}:{curr_node.port} to download file from {machine_username}@{machine_hostname}:{machine_file_location}")
                         asyncio.create_task(self.put_file(curr_node, machine_hostname, machine_username, machine_password, machine_file_location))
+
+            elif packet.type == PacketType.PUT_REQUEST:
+                sdfsFileName = data['filename']
+                download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
+                for node in download_nodes:
+                    await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': data['file_path'], 'filename': sdfsFileName}).pack())
+                    # ADD NODE STATUS IN LEADER OBJECT TOO
+
 
     async def _wait(self, node: Node, timeout: float) -> bool:
         """Function to wait for ACKs after PINGs"""
@@ -277,6 +286,10 @@ class Worker:
                         asyncio.create_task(self.introduce())
 
             await asyncio.sleep(PING_DURATION)
+    
+    async def send_put_request_to_leader(self, localFileName, sdfsFileName):
+        await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST, {'file_path': localFileName, 'filename': sdfsFileName}).pack())
+        # ADD FILE STATUS AS PENDING IN MY LIST
 
     async def check_user_input(self):
         """Function to ask for user input and handles"""

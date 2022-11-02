@@ -18,6 +18,11 @@ class PacketType(str, Enum):
     COORDINATE = '0111'
     COORDINATE_ACK = '1000'
     UPDATE_INTRODUCER = '1001'
+    DOWNLOAD_FILE = '1010'
+    DOWNLOAD_FILE_SUCCESS = '1011'
+    DOWNLOAD_FILE_FAIL = '1100'
+    PUT_REQUEST = '1101'
+
 
 class Packet:
     """Custom packet type for failure detector"""
