@@ -40,7 +40,6 @@ class Worker:
         self.leaderObj = None
         self.leaderNode: Node= None
         self.fetchingIntroducerFlag = True
-        self.electionPhase = False
         # if self.config.introducerFlag:
         #     self.leaderObj = Leader(self.config.node)
         #     self.leaderFlag = True
@@ -91,7 +90,6 @@ class Worker:
                         leader = packet.data['leader']
                         self.leaderNode = Node(leader.split(':')[0], int(leader.split(':')[1]))
 
-
                     self.waiting_for_introduction = False
                     # self.membership_list.update(packet.data)
                     self.missed_acks_count[curr_node] = 0
@@ -113,7 +111,6 @@ class Worker:
                     print("MY NEW LEADER IS", self.leaderNode.unique_name)
 
                 self.fetchingIntroducerFlag = False
-                print('setting fetch introducer flag to FALSE', self.fetchingIntroducerFlag)
                 self._notify_waiting(self.config.introducerDNSNode)
 
             elif packet.type == PacketType.PING or packet.type == PacketType.INTRODUCE:
@@ -121,13 +118,35 @@ class Worker:
                 self.membership_list.update(packet.data)
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.ACK, self.membership_list.get()).pack())
 
-
+            elif packet.type == PacketType.ELECTION:
+                print('I GOT AN ELECTION PACKET')
+                if not self.globalObj.election.electionPhase:
+                    print('STARTING MY OWN ELECTIONNNN')
+                    self.globalObj.election.initiate_election()
+                else:
+                    print('I will check if i am leader or not')
+                    if self.globalObj.election.check_if_leader():
+                        await self.send_coordinator_message()
+            
+            elif packet.type == PacketType.COORDINATE:
+                self.globalObj.election.electionPhase = False
+                self.leaderNode = Node(host, port)
+                print('MY NEW LEADER IS', host, port)
+                await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, {}).pack())
+            
+            elif packet.type == PacketType.COORDINATE_ACK:
+                self.globalObj.election.coordinate_ack += 1
+                if self.globalObj.election.coordinate_ack == len(self.membership_list.memberShipListDict.keys()) - 1:
+                    print('I AM THE NEW LEADER NOWWWWWWWWW MUAHAHAHAHAHAHA')
+                    self.leaderObj = Leader(self.config.node, self.globalObj)
+                    self.globalObj.set_leader(self.leaderObj)
+                    self.leaderFlag = True
+                    self.leaderNode = self.config.node
 
 
     async def _wait(self, node: Node, timeout: float) -> bool:
         """Function to wait for ACKs after PINGs"""
         event = Event()
-        print("adding wait to ", node.unique_name)
         self._add_waiting(node, event)
 
         try:
@@ -183,6 +202,22 @@ class Worker:
         logging.debug(f'pinging: {node.unique_name}')
         await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.PING, self.membership_list.get()).pack())
         await self._wait(node, PING_TIMEOOUT)
+
+    async def send_election_messages(self):
+        while True:
+            if self.globalObj.election.electionPhase:
+                for node in self.membership_list.current_pinging_nodes:
+                    print(f'sending election message to {node.unique_name}')
+                    await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.ELECTION, {}).pack())
+
+            await asyncio.sleep(PING_DURATION)
+    
+    async def send_coordinator_message(self):
+        online_nodes = self.membership_list.get_online_nodes()
+
+        for node in online_nodes:
+            await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.COORDINATE, {}).pack())
+            # await self._wait(node, PING_TIMEOOUT)
 
     async def run_failure_detection(self) -> NoReturn:
         """Function to sends pings to subset of nodes in the RING"""
@@ -268,5 +303,7 @@ class Worker:
         await asyncio.gather(
             self._run_handler(),
             self.run_failure_detection(),
-            self.check_user_input())
+            self.check_user_input(),
+            self.send_election_messages()
+            )
         raise RuntimeError()
