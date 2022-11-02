@@ -3,6 +3,7 @@ from typing import List
 from nodes import Node
 import time
 from nodes import Node
+from globalClass import Global
 
 import logging
 
@@ -12,7 +13,8 @@ from config import CLEANUP_TIME, M, GLOBAL_RING_TOPOLOGY, Config
 class MemberShipList:
     """Class to maintain Local membership list"""
 
-    def __init__(self, node: Node, ping_nodes: List[Node]):
+    def __init__(self, node: Node, ping_nodes: List[Node], globalObj: Global):
+        self.globalObj = globalObj
         self.memberShipListDict = {}
         self.itself: Node = node
         self.current_pinging_nodes: List[Node] = ping_nodes
@@ -33,6 +35,11 @@ class MemberShipList:
                     keys_for_cleanup.append(key)
 
         for key_for_cleanup in keys_for_cleanup:
+            print(key_for_cleanup, self.globalObj.worker.leaderNode.unique_name)
+            if key_for_cleanup == self.globalObj.worker.leaderNode.unique_name and not self.globalObj.election.electionPhase:
+                logging.error('I should start the election')
+                self.globalObj.election.initiate_election()
+
             del self.memberShipListDict[key_for_cleanup]
             self._nodes_cleaned.add(key_for_cleanup)
 
@@ -53,6 +60,12 @@ class MemberShipList:
             return node
 
         return self._find_replacement_node(GLOBAL_RING_TOPOLOGY[node][index], index, online_nodes, new_ping_nodes)
+
+    def get_online_nodes(self):
+        online_nodes = [Config.get_node_from_unique_name(
+            key) for key in self.memberShipListDict.keys()]
+
+        return online_nodes
 
     def topology_change(self):
         """Change topology change"""

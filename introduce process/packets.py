@@ -5,7 +5,6 @@ import struct
 import json
 from typing import Optional
 
-
 class PacketType(str, Enum):
     """Current packet types supported by failure detector"""
     PING = "0000"
@@ -14,9 +13,6 @@ class PacketType(str, Enum):
     INTRODUCE_ACK = "0011"
     FETCH_INTRODUCER = "0100"
     FETCH_INTRODUCER_ACK = "0101"
-    ELECTION = '0110'
-    COORDINATE = '0111'
-    COORDINATE_ACK = '1000'
 
 class Packet:
     """Custom packet type for failure detector"""
