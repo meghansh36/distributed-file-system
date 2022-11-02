@@ -17,6 +17,7 @@ class PacketType(str, Enum):
     ELECTION = '0110'
     COORDINATE = '0111'
     COORDINATE_ACK = '1000'
+    UPDATE_INTRODUCER = '1001'
 
 class Packet:
     """Custom packet type for failure detector"""

@@ -13,6 +13,7 @@ class PacketType(str, Enum):
     INTRODUCE_ACK = "0011"
     FETCH_INTRODUCER = "0100"
     FETCH_INTRODUCER_ACK = "0101"
+    UPDATE_INTRODUCER = '1001'
 
 class Packet:
     """Custom packet type for failure detector"""

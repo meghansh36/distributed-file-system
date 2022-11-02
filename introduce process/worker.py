@@ -56,6 +56,9 @@ class Worker:
                 print(f'{datetime.now()}: received ping from {host}:{port}')
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER_ACK, {'introducer': self.config.introducer}).pack())
 
+            elif packet.type == PacketType.UPDATE_INTRODUCER:
+                self.config.introducer = host + ':' + str(port)
+                await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER_ACK, {'introducer': self.config.introducer}).pack())
 
 
     # async def _wait(self, node: Node, timeout: float) -> bool:
