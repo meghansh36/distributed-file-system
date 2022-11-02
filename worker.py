@@ -108,7 +108,7 @@ class Worker:
                     else:
                         self.membership_list.update(packet.data['membership_list'])
                         leader = packet.data['leader']
-                        self.leaderNode = Node(leader.split(':')[0], int(leader.split(':')[1]))
+                        self.leaderNode = Config.get_node_from_unique_name(leader)
 
                     self.waiting_for_introduction = False
                     # self.membership_list.update(packet.data)
@@ -126,7 +126,7 @@ class Worker:
                     self.waiting_for_introduction = False
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:
-                    self.leaderNode = Node(introducer.split(':')[0], int(introducer.split(':')[1]))
+                    self.leaderNode = Config.get_node_from_unique_name(introducer)
                     print("MY NEW LEADER IS", self.leaderNode.unique_name)
 
                 self.fetchingIntroducerFlag = False
@@ -149,7 +149,7 @@ class Worker:
             
             elif packet.type == PacketType.COORDINATE:
                 self.globalObj.election.electionPhase = False
-                self.leaderNode = Node(host, port)
+                self.leaderNode = Config.get_node_from_unique_name(host + ":" + port)
                 print('MY NEW LEADER IS', host, port)
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, {}).pack())
             
