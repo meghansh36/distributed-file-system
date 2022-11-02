@@ -103,7 +103,6 @@ class Worker:
                     self.globalObj.set_leader(self.leaderObj)
                     self.leaderFlag = True
                     self.leaderNode = self.config.node
-                    print("if this workssss", self.globalObj.worker.total_pings_send)
                     self.waiting_for_introduction = False
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:
@@ -138,10 +137,12 @@ class Worker:
                 self.globalObj.election.coordinate_ack += 1
                 if self.globalObj.election.coordinate_ack == len(self.membership_list.memberShipListDict.keys()) - 1:
                     print('I AM THE NEW LEADER NOWWWWWWWWW MUAHAHAHAHAHAHA')
-                    self.leaderObj = Leader(self.config.node, self.globalObj)
-                    self.globalObj.set_leader(self.leaderObj)
-                    self.leaderFlag = True
-                    self.leaderNode = self.config.node
+                    await self.update_introducer()
+                    # self.leaderObj = Leader(self.config.node, self.globalObj)
+                    # self.globalObj.set_leader(self.leaderObj)
+                    # self.leaderFlag = True
+                    # self.leaderNode = self.config.node
+
 
 
     async def _wait(self, node: Node, timeout: float) -> bool:
@@ -197,6 +198,11 @@ class Worker:
         await self.io.send(self.config.introducerDNSNode.host, self.config.introducerDNSNode.port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER, {}).pack())
         await self._wait(self.config.introducerDNSNode, PING_TIMEOOUT)
 
+    async def update_introducer(self):
+        print('updating introducer on DNS')
+        await self.io.send(self.config.introducerDNSNode.host, self.config.introducerDNSNode.port, Packet(self.config.node.unique_name, PacketType.UPDATE_INTRODUCER, {}).pack())
+        await self._wait(self.config.introducerDNSNode, PING_TIMEOOUT)
+
     async def check(self, node: Node) -> None:
         """Fucntion to send PING to a node"""
         logging.debug(f'pinging: {node.unique_name}')
@@ -216,7 +222,8 @@ class Worker:
         online_nodes = self.membership_list.get_online_nodes()
 
         for node in online_nodes:
-            await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.COORDINATE, {}).pack())
+            if node.unique_name != self.config.node.unique_name :
+                await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.COORDINATE, {}).pack())
             # await self._wait(node, PING_TIMEOOUT)
 
     async def run_failure_detection(self) -> NoReturn:
