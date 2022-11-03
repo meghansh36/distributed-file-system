@@ -10,9 +10,9 @@ class Leader:
         self.globalObj = globalObj
         self.current_status = {}
         self.global_file_dict: dict = {
-            "127.0.0.1:8001": {'Q1.jpg': ['Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4', 'Q1.jpg_version5', 'Q1.jpg_version6']},
-            "127.0.0.1:8002": {'Q1.jpg': ['Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4', 'Q1.jpg_version5', 'Q1.jpg_version6']},
-            "127.0.0.1:8003": {'Q1.jpg': ['Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4', 'Q1.jpg_version5', 'Q1.jpg_version6']}
+            "127.0.0.1:8001": {'Q1.jpg': ['Q1.jpg_version1', 'Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4']},
+            # "127.0.0.1:8002": {'Q1.jpg': ['Q1.jpg_version1', 'Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4']},
+            "127.0.0.1:8003": {'Q1.jpg': ['Q1.jpg_version1', 'Q1.jpg_version2', 'Q1.jpg_version3', 'Q1.jpg_version4']}
         }
 
     def find_nodes_to_put_file(self, sdfsFileName: str):

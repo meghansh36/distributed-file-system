@@ -30,6 +30,8 @@ class PacketType(str, Enum):
     PUT_REQUEST = '10011'
     LIST_FILE_REQUEST = '10100'
     LIST_FILE_REQUEST_ACK = '10101'
+    GET_FILE_REQUEST = '10110'
+    GET_FILE_REQUEST_ACK = '10111'
 
 class Packet:
     """Custom packet type for failure detector"""

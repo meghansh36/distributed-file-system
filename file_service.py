@@ -2,7 +2,7 @@ import asyncssh
 import logging
 import os, shutil
 
-SDFS_LOCATION = "./sdfs/"
+SDFS_LOCATION = "/Users/rahul/Dev/college/CS425_Distributed_Systems/MPS/MP3/awesomesdfs/sdfs/" #"./sdfs/"
 MAX_FILE_VERSIONS = 5
 
 CLEANUP_ON_STARTUP = False
@@ -92,3 +92,16 @@ class FileService:
 
         response = {"local_store": self.current_files}
         return response, deleted
+    
+    def copyfile(self, sdfsfilename, dest):
+        return shutil.copy2(SDFS_LOCATION + sdfsfilename, dest)
+
+    async def download_file_to_dest(self, host: str, username: str, password: str, file_location: str, destination_file: str) -> None:  
+        # file_location = "/Users/rahul/Q1.jpg"
+        try:
+            async with asyncssh.connect(host, username=username, password=password) as conn:
+                await asyncssh.scp((conn, file_location), destination_file)
+            return True
+        except (OSError, asyncssh.Error) as exc:
+            logging.error(f'Failed to download file {file_location} from {host}: {str(exc)}')
+            return False
