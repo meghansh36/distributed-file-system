@@ -57,7 +57,7 @@ class FileService:
             destination_file = f"{filename}_version1"
 
         try:
-            async with asyncssh.connect(host, username=username, password=password) as conn:
+            async with asyncssh.connect(host, username=username, password=password, known_hosts=None) as conn:
                 await asyncssh.scp((conn, file_location), SDFS_LOCATION + destination_file)
             
             # saved file successfully add it to the dict

@@ -61,12 +61,12 @@ class Worker:
         if status:
             logging.info(f'successfully downloaded file {file_location} from {host} requested by {req_node.unique_name}')
             # download success sending sucess back to requester
-            response = {"filename": filename, "all_files": list(self.file_service.current_files.keys())}
+            response = {"filename": filename, "all_files": self.file_service.current_files}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_SUCCESS, response).pack())
         else:
             logging.error(f'failed to download file {file_location} from {host} requested by {req_node.unique_name}')
             # download failed sending failure message back to requester
-            response = {"filename": filename, "all_files": list(self.file_service.current_files.keys())}
+            response = {"filename": filename, "all_files": self.file_service.current_files}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_FAIL, response).pack())
     
     async def delete_file(self, req_node, filename):
@@ -117,14 +117,6 @@ class Worker:
 
             packet: Packet = Packet.unpack(packedPacket)
             if (not packet) or (not self.is_current_node_active):
-                # data = {
-                #          "hostname": "127.0.0.1",
-                #          "username": "rahul",
-                #          "password": "Terminator@5",
-                #          "file_path": "/Users/rahul/Q1.jpg",
-                #          "filename": "Q1.jpg"
-                #         }
-                # packet = Packet("127.0.0.1:8002", PacketType.DOWNLOAD_FILE, data)
                 continue
 
             logging.debug(f'got data: {packet.data} from {host}:{port}')
@@ -183,18 +175,17 @@ class Worker:
                 self.globalObj.election.electionPhase = False
                 self.leaderNode = Config.get_node_from_unique_name(host + ":" + f'{port}')
                 print('MY NEW LEADER IS', host, port)
-                await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, {}).pack())
+                response = {'all_files': self.file_service.current_files}
+                await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, response).pack())
             
             elif packet.type == PacketType.COORDINATE_ACK:
+                files_in_node = packet.data['all_files']
                 self.globalObj.election.coordinate_ack += 1
+                self.leaderObj.merge_files_in_global_dict(files_in_node, host, port)
+
                 if self.globalObj.election.coordinate_ack == len(self.membership_list.memberShipListDict.keys()) - 1:
-                    print('I AM THE NEW LEADER NOWWWWWWWWW MUAHAHAHAHAHAHA')
+                    print('I AM THE NEW LEADER NOWWWWWWWWW')
                     await self.update_introducer()
-                    # self.leaderObj = Leader(self.config.node, self.globalObj)
-                    # self.globalObj.set_leader(self.leaderObj)
-                    # self.leaderFlag = True
-                    # self.leaderNode = self.config.node
-                    pass
             
             elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
@@ -209,6 +200,20 @@ class Worker:
                     logging.debug(f"request from {curr_node.host}:{curr_node.port} to download file from {machine_username}@{machine_hostname}:{machine_file_location}")
                     asyncio.create_task(self.put_file(curr_node, machine_hostname, machine_username, machine_password, machine_file_location, machine_filename))
 
+            elif packet.type == PacketType.DOWNLOAD_FILE_SUCCESS:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                data: dict = packet.data
+                sdfsFileName = data['filename']
+                all_files = data['all_files']
+                if curr_node:
+                    # update status dict
+                    self.leaderObj.merge_files_in_global_dict(all_files, host, port)
+                    self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
+                    if self.leaderObj.check_if_request_completed(sdfsFileName):
+                        original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
+                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_ACK, {'filename': sdfsFileName}).pack())
+
+            
             elif packet.type == PacketType.DELETE_FILE:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
@@ -224,11 +229,17 @@ class Worker:
                     self.get_file(curr_node, machine_filename)
             
             elif packet.type == PacketType.PUT_REQUEST:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 sdfsFileName = packet.data['filename']
                 download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
+                self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'PUT')
                 for node in download_nodes:
-                    # ADD NODE STATUS IN LEADER OBJECT TOO
-                    await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': data['file_path'], 'filename': sdfsFileName}).pack())
+                    await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': packet.data['file_path'], 'filename': sdfsFileName}).pack())
+                    self.leaderObj.add_replica_to_file(sdfsFileName, node)
+                    
+            elif packet.type == PacketType.PUT_REQUEST_ACK:
+                filename = packet.data['filename']
+                print(f'FILE {filename} SUCCESSFULLY STORED')
 
             elif packet.type == PacketType.LIST_FILE_REQUEST:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -506,12 +517,13 @@ class Worker:
                         continue
                     
                     localfilename = options[1]
-                    if path.exists(localfilename):
+                    print(localfilename)
+                    if not path.exists(localfilename):
                         print('invalid localfilename for put command.')
                         continue
                     sdfsfilename = options[2]
 
-                    self.send_put_request_to_leader('/Users/rahul/Q1.jpg', 'test_file.jpg')
+                    await self.send_put_request_to_leader(localfilename, sdfsfilename)
                     # TODO implement logic to put a file
 
                 elif cmd == "get": # GET file
