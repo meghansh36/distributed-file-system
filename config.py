@@ -3,28 +3,28 @@ from nodes import Node
 
 M: final = 3
 
-PING_TIMEOOUT: final = 2
+PING_TIMEOOUT: final = 4
 
-PING_DURATION: final = 2.5
+PING_DURATION: final = 5
 
-CLEANUP_TIME: final = 10
+CLEANUP_TIME: final = 20
 
 INTRODUCER_DNS_HOST = "127.0.0.1"
 INTRODUCER_DNS_PORT = 8888
 
-USERNAME = 'meghansh'
-PASSWORD = ''
+USERNAME = "rahul"
+PASSWORD = ""
 
-H1: final = Node('127.0.0.1', 8001, 'H1')
-H2: final = Node('127.0.0.1', 8002, 'H2')
-H3: final = Node('127.0.0.1', 8003, 'H3')
-H4: final = Node('127.0.0.1', 8004, 'H4')
-H5: final = Node('127.0.0.1', 8005, 'H5')
-H6: final = Node('127.0.0.1', 8006, 'H6')
-H7: final = Node('127.0.0.1', 8007, 'H7')
-H8: final = Node('127.0.0.1', 8008, 'H8')
-H9: final = Node('127.0.0.1', 8009, 'H9')
-H10: final = Node('127.0.0.1', 8010, 'H10')
+H1: final = Node('127.0.0.1', 8001, USERNAME, PASSWORD, 'H1')
+H2: final = Node('127.0.0.1', 8002, USERNAME, PASSWORD, 'H2')
+H3: final = Node('127.0.0.1', 8003, USERNAME, PASSWORD, 'H3')
+H4: final = Node('127.0.0.1', 8004, USERNAME, PASSWORD, 'H4')
+H5: final = Node('127.0.0.1', 8005, USERNAME, PASSWORD, 'H5')
+H6: final = Node('127.0.0.1', 8006, USERNAME, PASSWORD, 'H6')
+H7: final = Node('127.0.0.1', 8007, USERNAME, PASSWORD, 'H7')
+H8: final = Node('127.0.0.1', 8008, USERNAME, PASSWORD, 'H8')
+H9: final = Node('127.0.0.1', 8009, USERNAME, PASSWORD, 'H9')
+H10: final = Node('127.0.0.1', 8010, USERNAME, PASSWORD, 'H10')
 
 # Global nodes configuration
 # ADD new nodes here...
@@ -75,7 +75,7 @@ class Config:
 
         self.node: Node = Config.get_node(hostname, port)
         self.ping_nodes: List[Node] = GLOBAL_RING_TOPOLOGY[self.node]
-        self.introducerDNSNode = Node(INTRODUCER_DNS_HOST, INTRODUCER_DNS_PORT)
+        self.introducerDNSNode = Node(INTRODUCER_DNS_HOST, INTRODUCER_DNS_PORT, USERNAME, PASSWORD)
         # self.introducerNode = None
         # self.introducerFlag = False
         # self.introducerNode = Node(introducer.split(

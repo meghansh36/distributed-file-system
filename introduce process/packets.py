@@ -7,13 +7,13 @@ from typing import Optional
 
 class PacketType(str, Enum):
     """Current packet types supported by failure detector"""
-    PING = "0000"
-    ACK = "0001"
-    INTRODUCE = "0010"
-    INTRODUCE_ACK = "0011"
-    FETCH_INTRODUCER = "0100"
-    FETCH_INTRODUCER_ACK = "0101"
-    UPDATE_INTRODUCER = '1001'
+    PING = "00000"
+    ACK = "00001"
+    INTRODUCE = "00010"
+    INTRODUCE_ACK = "00011"
+    FETCH_INTRODUCER = "00100"
+    FETCH_INTRODUCER_ACK = "00101"
+    UPDATE_INTRODUCER = '01001'
 
 class Packet:
     """Custom packet type for failure detector"""
@@ -26,7 +26,7 @@ class Packet:
     def pack(self) -> bytes:
         """Returns the bytes for packet"""
         jsondata = json.dumps(self.data)
-        return struct.pack(f"i{255}s{4}si{2048}s", len(self.sender), self.sender.encode('utf-8'), self.type.encode('utf-8'), len(jsondata), jsondata.encode())
+        return struct.pack(f"i{255}s{5}si{2048}s", len(self.sender), self.sender.encode('utf-8'), self.type.encode('utf-8'), len(jsondata), jsondata.encode())
 
         # pickled = pickle.dumps(self, pickle.HIGHEST_PROTOCOL)
         # return pickled
@@ -36,7 +36,7 @@ class Packet:
         """Converts the bytes to Packet class"""
         try:
             unpacked_tuple: tuple[bytearray] = struct.unpack(
-                f"i{255}s{4}si{2048}s", recvPacket)
+                f"i{255}s{5}si{2048}s", recvPacket)
             sender = unpacked_tuple[1][:unpacked_tuple[0]].decode('utf-8')
             packetType = unpacked_tuple[2].decode('utf-8')
             data = unpacked_tuple[4][:unpacked_tuple[3]].decode('utf-8')
