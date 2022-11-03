@@ -1,7 +1,5 @@
 import asyncssh
 import logging
-from nodes import Node
-import asyncio
 import os, shutil
 
 SDFS_LOCATION = "./sdfs/"
@@ -15,14 +13,26 @@ class FileService:
         self.current_files = {}
         if CLEANUP_ON_STARTUP:
             self.cleanup_all_files()
+        else:
+            self.load_files_from_directory()
 
     def load_files_from_directory(self):
-        pass
+        files = os.listdir(SDFS_LOCATION)
+        files.sort(reverse=True)
+        for filename in files:
+            pos = filename.rfind("_")
+            fullname = filename[:pos]
+            if fullname in self.current_files:
+                self.current_files[fullname].insert(0, filename)
+            else:
+                self.current_files[fullname] = [filename]
 
     def list_all_files(self):
+        files = "filename: [versions]\n"
         for key, value in self.current_files.items():
-            print(f"{key}: {len(value)}")
-    
+            files += f"{key}: {value}({len(value)})\n"
+        logging.info(f"files stored locally: \n{files}")
+
     def cleanup_all_files(self):
         for filename in os.listdir(SDFS_LOCATION):
             file_path = os.path.join(SDFS_LOCATION, filename)
@@ -34,8 +44,7 @@ class FileService:
             except Exception as e:
                 logging.error(f'Failed to delete {file_path}. Reason: {e}')
 
-    async def download_file(self, host: str, username: str, password: str, file_location: str, filename: str) -> None:
-        
+    async def download_file(self, host: str, username: str, password: str, file_location: str, filename: str) -> None:  
         destination_file = ""
         if filename in self.current_files:
             # file is already present
@@ -59,10 +68,27 @@ class FileService:
                     del self.current_files[filename][0]
             else:
                 self.current_files[filename] = [destination_file]
-            
-            self.list_all_files()
 
             return True
         except (OSError, asyncssh.Error) as exc:
             logging.error(f'Failed to download file {file_location} from {host}: {str(exc)}')
             return False
+    
+    def get_file_details(self, sdfsfilename):
+        response = {"local_store": self.current_files}
+        if sdfsfilename in self.current_files:
+            response["latest_file"] = self.current_files[sdfsfilename][-1]
+            response["all_versions"] = self.current_files[sdfsfilename]
+        return response
+
+    def delete_file(self, sdfsfilename):
+        deleted = False
+        if sdfsfilename in self.current_files:
+            files = self.current_files[sdfsfilename]
+            for file in files:
+                os.remove(SDFS_LOCATION + file)
+            del self.current_files[sdfsfilename]
+            deleted = True
+
+        response = {"local_store": self.current_files}
+        return response, deleted

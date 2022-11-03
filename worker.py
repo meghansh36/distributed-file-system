@@ -15,13 +15,13 @@ from leader import Leader
 from globalClass import Global
 from election import Election
 from file_service import FileService
+from os import path
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
     def __init__(self, io: AwesomeProtocol) -> None:
         self.io: Final = io
-        self._waiting: WeakKeyDictionary[Node,
-                                         WeakSet[Event]] = WeakKeyDictionary()
+        self._waiting: WeakKeyDictionary[Node, WeakSet[Event]] = WeakKeyDictionary()
         self.config: Config = None
         self.membership_list: Optional[MemberShipList] = None
         self.is_current_node_active = True
@@ -31,6 +31,7 @@ class Worker:
         self.missed_acks_count = {}
         self.file_service = FileService()
         self.file_status = {}
+        self._waiting_for_leader_event: Optional[Event] = None
 
     def initialize(self, config: Config, globalObj: Global) -> None:
         """Function to initialize all the required class for Worker"""
@@ -47,7 +48,6 @@ class Worker:
         #     self.leaderObj = Leader(self.config.node)
         #     self.leaderFlag = True
         #     self.leaderNode = self.config.node.unique_name
-
 
         self.membership_list = MemberShipList(
             self.config.node, self.config.ping_nodes, globalObj)
@@ -66,7 +66,33 @@ class Worker:
             # download failed sending failure message back to requester
             response = {"filename": filename, "all_files": list(self.file_service.current_files.keys())}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_FAIL, response).pack())
+    
+    async def delete_file(self, req_node, filename):
+        logging.debug(f"request from {req_node.host}:{req_node.port} to delete file {filename}")
+        response, status = self.file_service.delete_file(filename)
+        if status:
+            logging.info(f"successfully deleted file {filename}")
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_ACK, response).pack())
+        else:
+            logging.error(f"failed to delete file {filename}")
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_NAK, response).pack())
 
+    async def get_file(self, req_node, filename):
+        logging.debug(f"request from {req_node.host}:{req_node.port} to get file {filename}")
+        response = self.file_service.get_file_details(filename)
+        if "latest_file" in response:
+            logging.error(f"Failed to find the file {filename}")
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.GET_FILE_NAK, response).pack())
+        else:
+            logging.info(f"Found file {filename} locally")
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.GET_FILE_ACK, response).pack())
+
+    def display_machineids_for_file(self, sdfsfilename, machineids):
+        output = f"File {sdfsfilename} found in {len(machineids)} machines:\n"
+        for recv_machineid in machineids:
+            output += f"{recv_machineid}\n"
+        print(output)
+    
     def _add_waiting(self, node: Node, event: Event) -> None:
         """Function to keep track of all the unresponsive PINGs"""
         waiting = self._waiting.get(node)
@@ -89,6 +115,14 @@ class Worker:
 
             packet: Packet = Packet.unpack(packedPacket)
             if (not packet) or (not self.is_current_node_active):
+                # data = {
+                #          "hostname": "127.0.0.1",
+                #          "username": "rahul",
+                #          "password": "Terminator@5",
+                #          "file_path": "/Users/rahul/Q1.jpg",
+                #          "filename": "Q1.jpg"
+                #         }
+                # packet = Packet("127.0.0.1:8002", PacketType.DOWNLOAD_FILE, data)
                 continue
 
             logging.debug(f'got data: {packet.data} from {host}:{port}')
@@ -145,7 +179,7 @@ class Worker:
             
             elif packet.type == PacketType.COORDINATE:
                 self.globalObj.election.electionPhase = False
-                self.leaderNode = Config.get_node_from_unique_name(host + ":" + port)
+                self.leaderNode = Config.get_node_from_unique_name(host + ":" + f'{port}')
                 print('MY NEW LEADER IS', host, port)
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, {}).pack())
             
@@ -158,6 +192,7 @@ class Worker:
                     # self.globalObj.set_leader(self.leaderObj)
                     # self.leaderFlag = True
                     # self.leaderNode = self.config.node
+                    pass
             
             elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
@@ -172,13 +207,40 @@ class Worker:
                     logging.debug(f"request from {curr_node.host}:{curr_node.port} to download file from {machine_username}@{machine_hostname}:{machine_file_location}")
                     asyncio.create_task(self.put_file(curr_node, machine_hostname, machine_username, machine_password, machine_file_location, machine_filename))
 
+            elif packet.type == PacketType.DELETE_FILE:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    machine_filename = data["filename"]
+                    self.delete_file(curr_node, machine_filename)
+
+            elif packet.type == PacketType.GET_FILE:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    machine_filename = data["filename"]
+                    self.get_file(curr_node, machine_filename)
+            
             elif packet.type == PacketType.PUT_REQUEST:
-                sdfsFileName = data['filename']
+                sdfsFileName = packet.data['filename']
                 download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
                 for node in download_nodes:
                     await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': data['file_path'], 'filename': sdfsFileName}).pack())
                     # ADD NODE STATUS IN LEADER OBJECT TOO
 
+            elif packet.type == PacketType.LIST_FILE_REQUEST:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    sdfsFileName = packet.data['filename']
+                    machines = self.leaderObj.get_machineids_for_file(sdfsFileName)
+                    await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.LIST_FILE_REQUEST_ACK, {'filename': sdfsFileName, 'machines': machines}).pack())
+
+            elif packet.type == PacketType.LIST_FILE_REQUEST_ACK:
+                recv_sdfsfilename = packet.data['filename']
+                recv_machineids: list[str] = packet.data["machines"]
+                self.display_machineids_for_file(recv_sdfsfilename, recv_machineids)
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
 
     async def _wait(self, node: Node, timeout: float) -> bool:
         """Function to wait for ACKs after PINGs"""
@@ -217,6 +279,20 @@ class Worker:
             else:
                 logging.error(
                     f'Exception when waiting for ACK from introducer: {e}')
+
+        return event.is_set()
+
+    async def _wait_for_leader(self, timeout: float) -> bool:
+        """Function to wait for Leader to respond back for request"""
+        event = Event()
+        self._waiting_for_leader_event = event
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout)
+        except exceptions.TimeoutError:
+            print(f'{datetime.now()}: failed to recieve Response from Leader')
+        except Exception as e:
+            print(f'{datetime.now()}: Exception when waiting for Response from Leader: {e}')
 
         return event.is_set()
 
@@ -285,6 +361,15 @@ class Worker:
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST, {'file_path': localFileName, 'filename': sdfsFileName}).pack())
         # ADD FILE STATUS AS PENDING IN MY LIST
 
+    async def send_ls_request_to_leader(self, sdfsfilename):
+        await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.LIST_FILE_REQUEST, {'filename': sdfsfilename}).pack())
+        await self._wait_for_leader(20)
+    
+    def isCurrentNodeLeader(self):
+        if self.leaderNode is not None and self.config.node.port == self.leaderNode.port and self.config.node.host == self.leaderNode.host:
+            return True
+        return False
+
     async def check_user_input(self):
         """Function to ask for user input and handles"""
         loop = asyncio.get_event_loop()
@@ -297,21 +382,30 @@ class Worker:
 
         while True:
 
-            print(f'choose one of the following options:')
-            print('1. list the membership list.')
-            print('2. list self id.')
-            print('3. join the group.')
-            print('4. leave the group.')
+            print(f'choose one of the following options or type commands:')
+            print('options:')
+            print(' 1. list the membership list.')
+            print(' 2. list self id.')
+            print(' 3. join the group.')
+            print(' 4. leave the group.')
             if self.config.testing:
                 print('5. print current bps.')
                 print('6. current false positive rate.')
+            print('commands:')
+            print(' * put <localfilename> <sdfsfilename>')
+            print(' * get <sdfsfilename> <localfilename>')
+            print(' * delete <sdfsfilename>')
+            print(' * ls <sdfsfilename>')
+            print(' * store')
+            print(' * get-versions <sdfsfilename> <numversions> <localfilename>')
+            print('')
 
             option: Optional[str] = None
             while True:
                 option = await queue.get()
                 if option != '\n':
                     break
-
+            
             if option.strip() == '1':
                 self.membership_list.print()
             elif option.strip() == '2':
@@ -328,21 +422,141 @@ class Worker:
                 self.io.number_of_bytes_sent = 0
                 # self.initialize(self.config)
                 logging.info('stopped sending ACKs and PINGs')
-            elif option.strip() == '5':
+            elif self.config.testing and option.strip() == '5':
                 if self.io.time_of_first_byte != 0:
                     logging.info(
                         f'BPS: {(self.io.number_of_bytes_sent)/(time() - self.io.time_of_first_byte)}')
                 else:
                     logging.info(f'BPS: 0')
-            elif option.strip() == '6':
+            elif self.config.testing and option.strip() == '6':
                 if self.membership_list.false_positives > self.membership_list.indirect_failures:
                     logging.info(
                         f'False positive rate: {(self.membership_list.false_positives - self.membership_list.indirect_failures)/self.total_pings_send}, pings sent: {self.total_pings_send}, indirect failures: {self.membership_list.indirect_failures}, false positives: {self.membership_list.false_positives}')
                 else:
                     logging.info(
                         f'False positive rate: {(self.membership_list.indirect_failures - self.membership_list.false_positives)/self.total_pings_send}, pings sent: {self.total_pings_send}, indirect failures: {self.membership_list.indirect_failures}, false positives: {self.membership_list.false_positives}')
-            else:
-                print('invalid option.')
+            else: # checking if user typed cmd
+                option = option.strip()
+                options = option.split(' ')
+                if len(options) == 0:
+                    print('invalid option.')
+                cmd = options[0]
+                if cmd == "put": # PUT file
+                    # STEP - 1: forward local file details to leader
+                    # if current node is leader:
+                        # find 4 nodes to put file and ask them to download files.
+                    # else:
+                        # forward request to leader and wait for its response.
+                    # display the output to user
+                    if len(options) != 3:
+                        print('invalid options for put command.')
+                        continue
+                    
+                    localfilename = options[1]
+                    if path.exists(localfilename):
+                        print('invalid localfilename for put command.')
+                        continue
+                    sdfsfilename = options[2]
+
+                    self.send_put_request_to_leader('/Users/rahul/Q1.jpg', 'test_file.jpg')
+                    # TODO implement logic to put a file
+
+                elif cmd == "get": # GET file
+                    # STEP - 1: Get file location details from leader
+                    # if current node is leader:
+                        # check in its leader dict and get the location details.
+                    # else:
+                        # sending req to leader to get location details about file
+                        # wait until leader will respond back with file locations.
+                    # STEP - 2: Download file
+                    # start download
+                    # wait for download to complete.
+                    # reply success or failure message back to user.
+                    if len(options) != 3:
+                        print('invalid options for get command.')
+                        continue
+
+                    sdfsfilename = options[1]
+                    localfilename = options[2]
+                    if self.isCurrentNodeLeader():
+                        machineids_with_filenames = self.leaderObj.get_machineids_with_filenames(sdfsfilename)
+                        # download latest file locally
+                        if self.config.node.unique_name in machineids_with_filenames:
+                            # found files locally
+                            # copy file to dest file location
+                            pass
+                        else:
+                            # file not in local system, download files from machines
+                            pass
+                    else:
+                        # send request to leader to get all the machineids and filenames
+                        # download files once it respond back by creating a task
+                        # wait here until the download sucess or failed
+                        pass
+
+                elif cmd == "delete": # DEL file
+                    # STEP - 1: send delete file request to leader
+                    # if current node is leader:
+                        # forwards del requests to all the replicas
+                        # wait for them to reply success or failure
+                        # print success message
+                    # else:
+                        # forward req to leader to del file
+                        # wait until leader will respond back with success or failure.
+                        # display result
+                    if len(options) != 2:
+                        print('invalid options for delete command.')
+                        continue
+                    
+                    sdfsfilename = options[1]
+
+                    # TODO implement logic to delete a file
+                
+                elif cmd == "ls": # list all the
+                    # STEP - 1: Get file location details from leader
+                    # if current node is leader:
+                        # check in its leader dict and get the location details.
+                    # else:
+                        # sending req to leader to get location details about file
+                        # wait until leader will respond back with file locations.
+                    # display all the outputs
+                    if len(options) != 2:
+                        print('invalid options for ls command.')
+                        continue
+
+                    sdfsfilename = options[1]
+                    if self.isCurrentNodeLeader():
+                        machineids = self.leaderObj.get_machineids_for_file(sdfsfilename)
+                        self.display_machineids_for_file(sdfsfilename, machineids)
+                    else:
+                        await self.send_ls_request_to_leader(sdfsfilename)
+
+                elif cmd == "store": # store
+                    self.file_service.list_all_files()
+
+                elif cmd == "get-versions": # get-versions
+                    # STEP - 1: Get file location details from leader
+                    # if current node is leader:
+                        # check in its leader dict and get the location details.
+                    # else:
+                        # sending req to leader to get location details about file
+                        # wait until leader will respond back with file locations.
+                    # STEP - 2: Download files
+                    # start download
+                    # wait for download to complete.
+                    # reply success or failure message back to user.
+                    if len(options) != 4:
+                        print('invalid options for get-versions command.')
+                        continue
+                    
+                    sdfsfilename = options[1]
+                    numversions = options[2]
+                    localfilename = options[3]
+
+                    # TODO implement logic to get-versions of a file
+
+                else:
+                    print('invalid option.')
 
     @final
     async def run(self) -> NoReturn:

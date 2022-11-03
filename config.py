@@ -3,11 +3,11 @@ from nodes import Node
 
 M: final = 3
 
-PING_TIMEOOUT: final = 2
+PING_TIMEOOUT: final = 4
 
-PING_DURATION: final = 2.5
+PING_DURATION: final = 5
 
-CLEANUP_TIME: final = 10
+CLEANUP_TIME: final = 20
 
 INTRODUCER_DNS_HOST = "127.0.0.1"
 INTRODUCER_DNS_PORT = 8888
@@ -75,7 +75,7 @@ class Config:
 
         self.node: Node = Config.get_node(hostname, port)
         self.ping_nodes: List[Node] = GLOBAL_RING_TOPOLOGY[self.node]
-        self.introducerDNSNode = Node(INTRODUCER_DNS_HOST, INTRODUCER_DNS_PORT)
+        self.introducerDNSNode = Node(INTRODUCER_DNS_HOST, INTRODUCER_DNS_PORT, USERNAME, PASSWORD)
         # self.introducerNode = None
         # self.introducerFlag = False
         # self.introducerNode = Node(introducer.split(
