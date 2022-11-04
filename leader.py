@@ -35,7 +35,7 @@ class Leader:
         nodes = []
         for node, node_file_dict in self.global_file_dict.items():
             if sdfsFileName in node_file_dict:
-                nodes.append(node)
+                nodes.append(Config.get_node_from_unique_name(node))
         return nodes
 
     def find_nodes_to_put_file(self, sdfsFileName: str):
