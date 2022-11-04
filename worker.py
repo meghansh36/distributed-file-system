@@ -58,6 +58,29 @@ class Worker:
             self.config.node, self.config.ping_nodes, globalObj)
         
         self.io.testing = config.testing
+    
+    async def replica_file(self, req_node: Node, replicas: list[dict]):
+        status = False
+        filename = ""
+        for replica in replicas:
+            host = replica["hostname"]
+            username = USERNAME
+            password = PASSWORD
+            file_locations = replica["file_paths"]
+            filename = replica["filename"]
+            status = await self.file_service.replicate_file(host=host, username=username, password=password, file_locations=file_locations, filename=filename)
+            if status:
+                logging.info(f'successfully replicated file {filename} from {host} requested by {req_node.unique_name}')
+                response = {"filename": filename, "all_files": self.file_service.current_files}
+                await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.REPLICATE_FILE_SUCCESS, response).pack())
+                break
+            else:
+                logging.error(f'failed to replicate file {filename} from {host} requested by {req_node.unique_name}')
+        
+        if not status:
+            response = {"filename": filename, "all_files": self.file_service.current_files}
+            await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.REPLICATE_FILE_FAIL, response).pack())
+
 
     async def put_file(self, req_node: Node, host, username, password, file_location, filename):
         status = await self.file_service.download_file(host=host, username=username, password=password, file_location=file_location, filename=filename)
@@ -195,6 +218,20 @@ class Worker:
                     print('I AM THE NEW LEADER NOWWWWWWWWW')
                     await self.update_introducer()
             
+            elif packet.type == PacketType.REPLICATE_FILE:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    replicas = data["replicas"]
+                    logging.debug(f"request from {curr_node.host}:{curr_node.port} to replicate files from {machine_username}@{machine_hostname}:{machine_file_location}")
+                    asyncio.create_task(self.replica_file(req_node=curr_node, replicas=replicas))
+            
+            elif packet.type == PacketType.REPLICATE_FILE_SUCCESS:
+                pass
+
+            elif packet.type == PacketType.REPLICATE_FILE_FAIL:
+                pass
+
             elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
