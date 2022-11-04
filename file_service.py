@@ -2,10 +2,10 @@ import asyncssh
 import logging
 import os, shutil
 
-SDFS_LOCATION = "/Users/rahul/Dev/college/CS425_Distributed_Systems/MPS/MP3/awesomesdfs/sdfs/" #"./sdfs/"
+SDFS_LOCATION = "./sdfs/" #"./sdfs/"
 MAX_FILE_VERSIONS = 5
 
-CLEANUP_ON_STARTUP = False
+CLEANUP_ON_STARTUP = True
 
 class FileService:
 

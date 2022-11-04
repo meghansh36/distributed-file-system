@@ -4,6 +4,7 @@ from nodes import Node
 import time
 from nodes import Node
 from globalClass import Global
+import asyncio
 
 import logging
 
@@ -46,6 +47,7 @@ class MemberShipList:
 
         if len(self._nodes_cleaned) >= M:
             self.topology_change()
+            asyncio.create_task(self.globalObj.worker.replicate_files())
             self._nodes_cleaned.clear()
 
         new_ping_nodes = []
