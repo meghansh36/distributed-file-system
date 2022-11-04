@@ -30,6 +30,13 @@ class Leader:
                     return True
         
         return False
+    
+    def find_nodes_to_delete_file(self, sdfsFileName: str):
+        nodes = []
+        for node, node_file_dict in self.global_file_dict.items():
+            if sdfsFileName in node_file_dict:
+                nodes.append(node)
+        return nodes
 
     def find_nodes_to_put_file(self, sdfsFileName: str):
 
@@ -55,6 +62,9 @@ class Leader:
                 nodes.append(Config.get_node_from_id('H'+str(id)))
 
         return nodes
+    
+    def is_file_upload_inprogress(self, sdfsFileName):
+        return sdfsFileName in self.status_dict
 
     def get_machineids_for_file(self, sdfsFileName) -> list:
         machineids = []

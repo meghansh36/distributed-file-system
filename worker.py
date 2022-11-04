@@ -73,12 +73,14 @@ class Worker:
     
     async def delete_file(self, req_node, filename):
         logging.debug(f"request from {req_node.host}:{req_node.port} to delete file {filename}")
-        response, status = self.file_service.delete_file(filename)
+        status = self.file_service.delete_file(filename)
         if status:
             logging.info(f"successfully deleted file {filename}")
+            response = {"filename": filename, "all_files": self.file_service.current_files}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_ACK, response).pack())
         else:
             logging.error(f"failed to delete file {filename}")
+            response = {"filename": filename, "all_files": self.file_service.current_files}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_NAK, response).pack())
 
     async def get_file(self, req_node, filename):
@@ -207,15 +209,16 @@ class Worker:
 
             elif packet.type == PacketType.DOWNLOAD_FILE_SUCCESS:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
-                data: dict = packet.data
-                sdfsFileName = data['filename']
-                all_files = data['all_files']
                 if curr_node:
+                    data: dict = packet.data
+                    sdfsFileName = data['filename']
+                    all_files = data['all_files']
+                    # update status dict
                     self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
                     self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
                     if self.leaderObj.check_if_request_completed(sdfsFileName):
                         original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
-                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_ACK, {'filename': sdfsFileName}).pack())
+                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
                         self.leaderObj.delete_status_for_file(sdfsFileName)
             
             elif packet.type == PacketType.DELETE_FILE:
@@ -225,25 +228,91 @@ class Worker:
                     machine_filename = data["filename"]
                     self.delete_file(curr_node, machine_filename)
 
+            elif packet.type == PacketType.DELETE_FILE_ACK or packet.type == PacketType.DELETE_FILE_NAK:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    sdfsFileName = data['filename']
+                    all_files = data['all_files']
+                    # update status dict
+                    self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
+                    self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
+                    if self.leaderObj.check_if_request_completed(sdfsFileName):
+                        original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
+                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
+                        # TODO remove entry from status file.
+
             elif packet.type == PacketType.GET_FILE:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
                     machine_filename = data["filename"]
                     self.get_file(curr_node, machine_filename)
-            
+
             elif packet.type == PacketType.PUT_REQUEST:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
-                sdfsFileName = packet.data['filename']
-                download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
-                self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'PUT')
-                for node in download_nodes:
-                    await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': packet.data['file_path'], 'filename': sdfsFileName}).pack())
-                    self.leaderObj.add_replica_to_file(sdfsFileName, node)
-                    
+                if curr_node:
+                    sdfsFileName = packet.data['filename']
+                    if self.leaderObj.is_file_upload_inprogress(sdfsFileName):
+                        await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_FAIL, {'filename': sdfsFileName, 'error': 'File upload already inprogress...'}).pack())
+                    else:
+                        download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
+                        self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'PUT')
+                        for node in download_nodes:
+                            await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': packet.data['file_path'], 'filename': sdfsFileName}).pack())
+                            self.leaderObj.add_replica_to_file(sdfsFileName, node)
+                        await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_ACK, {'filename': sdfsFileName}).pack())
+
+            elif packet.type == PacketType.DELETE_FILE_REQUEST:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    sdfsFileName = packet.data['filename']
+                    if self.leaderObj.is_file_upload_inprogress(sdfsFileName):
+                        await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_FAIL, {'error': "File upload inprogress"}).pack())
+                    else:
+                        file_nodes = self.leaderObj.find_nodes_to_delete_file(sdfsFileName)
+                        if len(file_nodes) == 0:
+                            await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
+                        else:
+                            self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'DELETE')
+                            for node in file_nodes:
+                                await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE, {'filename': sdfsFileName}).pack())
+                                self.leaderObj.add_replica_to_file(sdfsFileName, node)
+                            await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_ACK, {'filename': sdfsFileName}).pack())
+
+            elif packet.type == PacketType.DELETE_FILE_REQUEST_ACK:
+                filename = packet.data['filename']
+                print(f'Leader successfully received DELETE request for file {filename}. waiting for nodes to delete the file...')
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
+
+            elif packet.type == PacketType.DELETE_FILE_REQUEST_FAIL:
+                filename = packet.data['filename']
+                error = packet.data['error']
+                print(f'Failed to delete file {filename}: {error}')
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
+
+            elif packet.type == PacketType.DELETE_FILE_REQUEST_SUCCESS:
+                filename = packet.data['filename']
+                print(f'FILE {filename} SUCCESSFULLY DELETED')
+
             elif packet.type == PacketType.PUT_REQUEST_ACK:
                 filename = packet.data['filename']
+                print(f'Leader successfully received PUT request for file {filename}. waiting for nodes to download the file...')
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
+
+            elif packet.type == PacketType.PUT_REQUEST_SUCCESS:
+                filename = packet.data['filename']
                 print(f'FILE {filename} SUCCESSFULLY STORED')
+
+            elif packet.type == PacketType.PUT_REQUEST_FAIL:
+                filename = packet.data['filename']
+                error = packet.data['error']
+                print(f'Failed to PUT file {filename}: {error}')
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
 
             elif packet.type == PacketType.LIST_FILE_REQUEST:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -265,7 +334,7 @@ class Worker:
                     sdfsFileName = packet.data['filename']
                     machineids_with_filenames = self.leaderObj.get_machineids_with_filenames(sdfsFileName)
                     await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.GET_FILE_REQUEST_ACK, {'filename': sdfsFileName, 'machineids_with_file_versions': machineids_with_filenames}).pack())
-            
+
             elif packet.type == PacketType.GET_FILE_REQUEST_ACK:
                 self.get_file_sdfsfilename = packet.data['filename']
                 self.get_file_machineids_with_file_versions = packet.data["machineids_with_file_versions"]
@@ -387,10 +456,14 @@ class Worker:
                         asyncio.create_task(self.introduce())
 
             await asyncio.sleep(PING_DURATION)
-    
+
     async def send_put_request_to_leader(self, localFileName, sdfsFileName):
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST, {'file_path': localFileName, 'filename': sdfsFileName}).pack())
-        # ADD FILE STATUS AS PENDING IN MY LIST
+        await self._wait_for_leader(20)
+
+    async def send_del_request_to_leader(self, sdfsFileName):
+        await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST, {'filename': sdfsFileName}).pack())
+        await self._wait_for_leader(20)
 
     async def send_ls_request_to_leader(self, sdfsfilename):
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.LIST_FILE_REQUEST, {'filename': sdfsfilename}).pack())
@@ -415,7 +488,10 @@ class Worker:
         # leader node will find out the unique files in the system.
         # for each unique file, find the array of nodes
         # if file doesnt have 4 nodes, choose the missing number of nodes randomly
+<<<<<<< HEAD
         # ask them to put file from one of the working nodes
+=======
+>>>>>>> aedc831abb746e5107fc499ae454b2026b26054f
         pass
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
@@ -537,14 +613,12 @@ class Worker:
                         continue
                     
                     localfilename = options[1]
-                    print(localfilename)
                     if not path.exists(localfilename):
                         print('invalid localfilename for put command.')
                         continue
                     sdfsfilename = options[2]
 
                     await self.send_put_request_to_leader(localfilename, sdfsfilename)
-                    # TODO implement logic to put a file
 
                 elif cmd == "get": # GET file
                     if len(options) != 3:
@@ -584,6 +658,10 @@ class Worker:
                         continue
                     
                     sdfsfilename = options[1]
+
+                    await self.send_put_request_to_leader(localfilename, sdfsfilename)
+
+
                 
                 elif cmd == "ls": # list all the
                     if len(options) != 2:

@@ -89,9 +89,7 @@ class FileService:
                 os.remove(SDFS_LOCATION + file)
             del self.current_files[sdfsfilename]
             deleted = True
-
-        response = {"local_store": self.current_files}
-        return response, deleted
+        return deleted
     
     def copyfile(self, sdfsfilename, dest):
         return shutil.copy2(SDFS_LOCATION + sdfsfilename, dest)
