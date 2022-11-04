@@ -18,26 +18,41 @@ class Leader:
         self.global_file_dict: dict = {}
         self.status_dict: dict = {}
     
-    def merge_files_in_global_dict(self, files_in_node, host, port):
+    def merge_files_in_global_dict(self, files_in_node, sender):
 
-        node_name = f'{host}:{port}'
-        self.global_file_dict[node_name] = files_in_node
+        self.global_file_dict[sender] = files_in_node
 
+    def check_if_file_exists(self, sdfsFileName):
+
+        for node in self.global_file_dict.keys():
+            for file in self.global_file_dict[node].keys():
+                if file == sdfsFileName:
+                    return True
+        
+        return False
 
     def find_nodes_to_put_file(self, sdfsFileName: str):
-        hashObj = hashlib.sha256(sdfsFileName.encode('utf-8'))
-        val = int.from_bytes(hashObj.digest(), 'big')
-        
-        nodes = []
 
-        node_id_set = set()
-        while len(node_id_set) < 4:
-            val += int(random() * 100)
-            id = (val % len(self.globalObj.worker.membership_list.memberShipListDict)) + 1
-            node_id_set.add(id)
-        
-        for id in node_id_set:
-            nodes.append(Config.get_node_from_id('H'+str(id)))
+        nodes = []
+        if self.check_if_file_exists(sdfsFileName):
+            for node in self.global_file_dict.keys():
+                for file in self.global_file_dict[node].keys():
+                    if file == sdfsFileName:
+                        nodes.append(Config.get_node_from_unique_name(node))
+                        break
+            
+        else:
+            hashObj = hashlib.sha256(sdfsFileName.encode('utf-8'))
+            val = int.from_bytes(hashObj.digest(), 'big')
+
+            node_id_set = set()
+            while len(node_id_set) < 4:
+                val += int(random() * 100)
+                id = (val % len(self.globalObj.worker.membership_list.memberShipListDict)) + 1
+                node_id_set.add(id)
+            
+            for id in node_id_set:
+                nodes.append(Config.get_node_from_id('H'+str(id)))
 
         return nodes
 

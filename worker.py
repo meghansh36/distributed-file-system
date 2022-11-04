@@ -16,6 +16,7 @@ from globalClass import Global
 from election import Election
 from file_service import FileService
 from os import path
+import copy
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -46,6 +47,7 @@ class Worker:
         self.leaderObj: Leader = None
         self.leaderNode: Node= None
         self.fetchingIntroducerFlag = True
+        self.temporary_file_dict = {}
         # if self.config.introducerFlag:
         #     self.leaderObj = Leader(self.config.node)
         #     self.leaderFlag = True
@@ -148,6 +150,8 @@ class Worker:
                     self.leaderFlag = True
                     self.leaderNode = self.config.node
                     self.waiting_for_introduction = False
+                    self.leaderObj.global_file_dict = copy.deepcopy(self.temporary_file_dict)
+                    self.temporary_file_dict = {}
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:
                     self.leaderNode = Config.get_node_from_unique_name(introducer)
@@ -181,7 +185,8 @@ class Worker:
             elif packet.type == PacketType.COORDINATE_ACK:
                 files_in_node = packet.data['all_files']
                 self.globalObj.election.coordinate_ack += 1
-                self.leaderObj.merge_files_in_global_dict(files_in_node, host, port)
+                self.temporary_file_dict[packet.sender] = files_in_node
+                # self.leaderObj.merge_files_in_global_dict(files_in_node, host, port)
 
                 if self.globalObj.election.coordinate_ack == len(self.membership_list.memberShipListDict.keys()) - 1:
                     print('I AM THE NEW LEADER NOWWWWWWWWW')
@@ -207,7 +212,7 @@ class Worker:
                 all_files = data['all_files']
                 if curr_node:
                     # update status dict
-                    self.leaderObj.merge_files_in_global_dict(all_files, host, port)
+                    self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
                     self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
                     if self.leaderObj.check_if_request_completed(sdfsFileName):
                         original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
@@ -356,6 +361,7 @@ class Worker:
             await asyncio.sleep(PING_DURATION)
     
     async def send_coordinator_message(self):
+        self.temporary_file_dict = {}
         online_nodes = self.membership_list.get_online_nodes()
 
         for node in online_nodes:
@@ -471,6 +477,8 @@ class Worker:
             
             if option.strip() == '1':
                 self.membership_list.print()
+                if self.leaderFlag:
+                    print(self.leaderObj.global_file_dict)
             elif option.strip() == '2':
                 print(self.config.node.unique_name)
             elif option.strip() == '3':
