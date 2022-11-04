@@ -402,9 +402,14 @@ class Worker:
         await self._wait_for_leader(20)
 
     def isCurrentNodeLeader(self):
-        if self.leaderNode is not None and self.config.node.port == self.leaderNode.port and self.config.node.host == self.leaderNode.host:
+        if self.leaderObj is not None and self.config.node.unique_name == self.leaderNode.unique_name:
             return True
         return False
+
+    async def replicate_files(self):
+        # leader node will find out the unique files in the system.
+        # for each unique file, find the array of nodes
+        # if file doesnt have 4 nodes, choose the missing number of nodes randomly
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
         # download latest file locally
