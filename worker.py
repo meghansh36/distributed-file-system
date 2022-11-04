@@ -631,7 +631,7 @@ class Worker:
 
                     event = Event()
                     self._waiting_for_second_leader_event = event
-                    await asyncio.wait(self._waiting_for_second_leader_event.wait())
+                    await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event.set()
                     
@@ -669,7 +669,7 @@ class Worker:
 
                     event = Event()
                     self._waiting_for_second_leader_event = event
-                    await asyncio.wait(self._waiting_for_second_leader_event.wait())
+                    await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event.set()
                 
