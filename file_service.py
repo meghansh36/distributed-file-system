@@ -98,7 +98,7 @@ class FileService:
         # file_location = "/Users/rahul/Q1.jpg"
         try:
             async with asyncssh.connect(host, username=username, password=password) as conn:
-                await asyncssh.scp((conn, file_location), destination_file)
+                await asyncssh.scp((conn, SDFS_LOCATION + file_location), destination_file)
             return True
         except (OSError, asyncssh.Error) as exc:
             logging.error(f'Failed to download file {file_location} from {host}: {str(exc)}')
