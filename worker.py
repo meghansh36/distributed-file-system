@@ -227,7 +227,7 @@ class Worker:
                 if curr_node:
                     data: dict = packet.data
                     machine_filename = data["filename"]
-                    self.delete_file(curr_node, machine_filename)
+                    await self.delete_file(curr_node, machine_filename)
 
             elif packet.type == PacketType.DELETE_FILE_ACK or packet.type == PacketType.DELETE_FILE_NAK:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -241,7 +241,7 @@ class Worker:
                     if self.leaderObj.check_if_request_completed(sdfsFileName):
                         original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
                         await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
-                        # TODO remove entry from status file.
+                        self.leaderObj.delete_status_for_file(sdfsFileName)
 
             elif packet.type == PacketType.GET_FILE:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
