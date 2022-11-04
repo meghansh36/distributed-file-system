@@ -33,6 +33,7 @@ class Worker:
         self.file_service = FileService()
         self.file_status = {}
         self._waiting_for_leader_event: Optional[Event] = None
+        self._waiting_for_second_leader_event: Optional[Event] = None
         self.get_file_sdfsfilename = None
         self.get_file_machineids_with_file_versions = None
 
@@ -292,10 +293,19 @@ class Worker:
                 print(f'Failed to delete file {filename}: {error}')
                 if self._waiting_for_leader_event is not None:
                     self._waiting_for_leader_event.set()
+                
+                if self._waiting_for_second_leader_event is not None:
+                    self._waiting_for_second_leader_event.set()
 
             elif packet.type == PacketType.DELETE_FILE_REQUEST_SUCCESS:
                 filename = packet.data['filename']
                 print(f'FILE {filename} SUCCESSFULLY DELETED')
+
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
+
+                if self._waiting_for_second_leader_event is not None:
+                    self._waiting_for_second_leader_event.set()
 
             elif packet.type == PacketType.PUT_REQUEST_ACK:
                 filename = packet.data['filename']
@@ -307,12 +317,21 @@ class Worker:
                 filename = packet.data['filename']
                 print(f'FILE {filename} SUCCESSFULLY STORED')
 
+                if self._waiting_for_leader_event is not None:
+                    self._waiting_for_leader_event.set()
+
+                if self._waiting_for_second_leader_event is not None:
+                    self._waiting_for_second_leader_event.set()
+
             elif packet.type == PacketType.PUT_REQUEST_FAIL:
                 filename = packet.data['filename']
                 error = packet.data['error']
                 print(f'Failed to PUT file {filename}: {error}')
                 if self._waiting_for_leader_event is not None:
                     self._waiting_for_leader_event.set()
+                
+                if self._waiting_for_second_leader_event is not None:
+                    self._waiting_for_second_leader_event.set()
 
             elif packet.type == PacketType.LIST_FILE_REQUEST:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -488,10 +507,6 @@ class Worker:
         # leader node will find out the unique files in the system.
         # for each unique file, find the array of nodes
         # if file doesnt have 4 nodes, choose the missing number of nodes randomly
-<<<<<<< HEAD
-        # ask them to put file from one of the working nodes
-=======
->>>>>>> aedc831abb746e5107fc499ae454b2026b26054f
         pass
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
@@ -602,12 +617,6 @@ class Worker:
                 cmd = options[0]
 
                 if cmd == "put": # PUT file
-                    # STEP - 1: forward local file details to leader
-                    # if current node is leader:
-                        # find 4 nodes to put file and ask them to download files.
-                    # else:
-                        # forward request to leader and wait for its response.
-                    # display the output to user
                     if len(options) != 3:
                         print('invalid options for put command.')
                         continue
@@ -619,6 +628,13 @@ class Worker:
                     sdfsfilename = options[2]
 
                     await self.send_put_request_to_leader(localfilename, sdfsfilename)
+
+                    event = Event()
+                    self._waiting_for_second_leader_event = event
+                    await asyncio.wait(self._waiting_for_second_leader_event.wait())
+                    del self._waiting_for_second_leader_event
+                    self._waiting_for_second_leader_event.set()
+                    
 
                 elif cmd == "get": # GET file
                     if len(options) != 3:
@@ -644,24 +660,18 @@ class Worker:
                         print("get: done!!!")
 
                 elif cmd == "delete": # DEL file
-                    # STEP - 1: send delete file request to leader
-                    # if current node is leader:
-                        # forwards del requests to all the replicas
-                        # wait for them to reply success or failure
-                        # print success message
-                    # else:
-                        # forward req to leader to del file
-                        # wait until leader will respond back with success or failure.
-                        # display result
                     if len(options) != 2:
                         print('invalid options for delete command.')
                         continue
-                    
+
                     sdfsfilename = options[1]
+                    await self.send_del_request_to_leader(sdfsfilename)
 
-                    await self.send_put_request_to_leader(localfilename, sdfsfilename)
-
-
+                    event = Event()
+                    self._waiting_for_second_leader_event = event
+                    await asyncio.wait(self._waiting_for_second_leader_event.wait())
+                    del self._waiting_for_second_leader_event
+                    self._waiting_for_second_leader_event.set()
                 
                 elif cmd == "ls": # list all the
                     if len(options) != 2:
