@@ -86,7 +86,10 @@ class FileService:
         if sdfsfilename in self.current_files:
             files = self.current_files[sdfsfilename]
             for file in files:
-                os.remove(SDFS_LOCATION + file)
+                try:
+                    os.remove(SDFS_LOCATION + file)
+                except FileNotFoundError:
+                    print(f"FileNotFoundError: {file}")
             del self.current_files[sdfsfilename]
             deleted = True
         return deleted
