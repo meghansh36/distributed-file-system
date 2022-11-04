@@ -633,7 +633,7 @@ class Worker:
                     self._waiting_for_second_leader_event = event
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
-                    self._waiting_for_second_leader_event.set()
+                    self._waiting_for_second_leader_event = None
                     
 
                 elif cmd == "get": # GET file
@@ -671,7 +671,7 @@ class Worker:
                     self._waiting_for_second_leader_event = event
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
-                    self._waiting_for_second_leader_event.set()
+                    self._waiting_for_second_leader_event = None
                 
                 elif cmd == "ls": # list all the
                     if len(options) != 2:
