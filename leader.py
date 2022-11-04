@@ -88,3 +88,6 @@ class Leader:
     
     def add_replica_to_file(self, sdfsFileName: str, replicaNode: Node):
         self.status_dict[sdfsFileName]['replicas'][replicaNode.unique_name] = 'Waiting'
+
+    def delete_status_for_file(self, sdfsFileName: str):
+        del self.status_dict[sdfsFileName]

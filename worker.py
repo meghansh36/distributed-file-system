@@ -211,13 +211,12 @@ class Worker:
                 sdfsFileName = data['filename']
                 all_files = data['all_files']
                 if curr_node:
-                    # update status dict
                     self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
                     self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
                     if self.leaderObj.check_if_request_completed(sdfsFileName):
                         original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
                         await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_ACK, {'filename': sdfsFileName}).pack())
-
+                        self.leaderObj.delete_status_for_file(sdfsFileName)
             
             elif packet.type == PacketType.DELETE_FILE:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -406,10 +405,18 @@ class Worker:
             return True
         return False
 
+    def handle_failures_if_pending_status(self):
+        # TODO
+        
+        pass
+
     async def replicate_files(self):
+        # TODO
         # leader node will find out the unique files in the system.
         # for each unique file, find the array of nodes
         # if file doesnt have 4 nodes, choose the missing number of nodes randomly
+        # ask them to put file from one of the working nodes
+        pass
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
         # download latest file locally
