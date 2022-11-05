@@ -43,6 +43,7 @@ class MemberShipList:
                     self.globalObj.election.initiate_election()
 
             del self.memberShipListDict[key_for_cleanup]
+            asyncio.create_task(self.globalObj.worker.handle_failures_if_pending_status(key_for_cleanup))
             self._nodes_cleaned.add(key_for_cleanup)
 
         if len(self._nodes_cleaned) >= M:
