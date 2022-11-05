@@ -9,35 +9,44 @@ PING_DURATION: final = 5
 
 CLEANUP_TIME: final = 20
 
-INTRODUCER_DNS_HOST = "127.0.0.1"
+# INTRODUCER_DNS_HOST = '127.0.0.1'
+INTRODUCER_DNS_HOST = "fa22-cs425-6901.cs.illinois.edu"
 INTRODUCER_DNS_PORT = 8888
 
-USERNAME = "meghansh"
-PASSWORD = "Toshiba@1234"
+# USERNAME = 'meghansh'
+USERNAME = "mgoel7"
+PASSWORD = None
 
-H1: final = Node('127.0.0.1', 8001, USERNAME, PASSWORD, 'H1')
-H2: final = Node('127.0.0.1', 8002, USERNAME, PASSWORD, 'H2')
-H3: final = Node('127.0.0.1', 8003, USERNAME, PASSWORD, 'H3')
-H4: final = Node('127.0.0.1', 8004, USERNAME, PASSWORD, 'H4')
-H5: final = Node('127.0.0.1', 8005, USERNAME, PASSWORD, 'H5')
-H6: final = Node('127.0.0.1', 8006, USERNAME, PASSWORD, 'H6')
-H7: final = Node('127.0.0.1', 8007, USERNAME, PASSWORD, 'H7')
-H8: final = Node('127.0.0.1', 8008, USERNAME, PASSWORD, 'H8')
-H9: final = Node('127.0.0.1', 8009, USERNAME, PASSWORD, 'H9')
-H10: final = Node('127.0.0.1', 8010, USERNAME, PASSWORD, 'H10')
+with open('password.txt') as f:
+    line = f.readline()
+    PASSWORD = line.strip()
+    f.close()
+
+    
+
+# H1: final = Node('127.0.0.1', 8001, USERNAME, PASSWORD, 'H1')
+# H2: final = Node('127.0.0.1', 8002, USERNAME, PASSWORD, 'H2')
+# H3: final = Node('127.0.0.1', 8003, USERNAME, PASSWORD, 'H3')
+# H4: final = Node('127.0.0.1', 8004, USERNAME, PASSWORD, 'H4')
+# H5: final = Node('127.0.0.1', 8005, USERNAME, PASSWORD, 'H5')
+# H6: final = Node('127.0.0.1', 8006, USERNAME, PASSWORD, 'H6')
+# H7: final = Node('127.0.0.1', 8007, USERNAME, PASSWORD, 'H7')
+# H8: final = Node('127.0.0.1', 8008, USERNAME, PASSWORD, 'H8')
+# H9: final = Node('127.0.0.1', 8009, USERNAME, PASSWORD, 'H9')
+# H10: final = Node('127.0.0.1', 8010, USERNAME, PASSWORD, 'H10')
 
 # Global nodes configuration
 # ADD new nodes here...
-# H1: final = Node('fa22-cs425-6901.cs.illinois.edu', 8000, 'H1')
-# H2: final = Node('fa22-cs425-6902.cs.illinois.edu', 8000, 'H2')
-# H3: final = Node('fa22-cs425-6903.cs.illinois.edu', 8000, 'H3')
-# H4: final = Node('fa22-cs425-6904.cs.illinois.edu', 8000, 'H4')
-# H5: final = Node('fa22-cs425-6905.cs.illinois.edu', 8000, 'H5')
-# H6: final = Node('fa22-cs425-6906.cs.illinois.edu', 8000, 'H6')
-# H7: final = Node('fa22-cs425-6907.cs.illinois.edu', 8000, 'H7')
-# H8: final = Node('fa22-cs425-6908.cs.illinois.edu', 8000, 'H8')
-# H9: final = Node('fa22-cs425-6909.cs.illinois.edu', 8000, 'H9')
-# H10: final = Node('fa22-cs425-6910.cs.illinois.edu', 8000, 'H10')
+H1: final = Node('fa22-cs425-6901.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H1')
+H2: final = Node('fa22-cs425-6902.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H2')
+H3: final = Node('fa22-cs425-6903.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H3')
+H4: final = Node('fa22-cs425-6904.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H4')
+H5: final = Node('fa22-cs425-6905.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H5')
+H6: final = Node('fa22-cs425-6906.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H6')
+H7: final = Node('fa22-cs425-6907.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H7')
+H8: final = Node('fa22-cs425-6908.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H8')
+H9: final = Node('fa22-cs425-6909.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H9')
+H10: final = Node('fa22-cs425-6910.cs.illinois.edu', 8000,USERNAME, PASSWORD, 'H10')
 
 # Current Ring topology
 # Edit the ring as needed
