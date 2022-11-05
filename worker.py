@@ -228,7 +228,7 @@ class Worker:
                     asyncio.create_task(self.replica_file(req_node=curr_node, replicas=replicas))
             
             elif packet.type == PacketType.REPLICATE_FILE_SUCCESS:
-                pass
+                pass 
 
             elif packet.type == PacketType.REPLICATE_FILE_FAIL:
                 pass
