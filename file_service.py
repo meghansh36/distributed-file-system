@@ -1,11 +1,12 @@
 import asyncssh
 import logging
 import os, shutil
+from typing import List
 
 SDFS_LOCATION = "/mnt/d/sdfs/" #"./sdfs/"
 MAX_FILE_VERSIONS = 5
 
-CLEANUP_ON_STARTUP = False
+CLEANUP_ON_STARTUP = True
 
 class FileService:
 
@@ -44,10 +45,11 @@ class FileService:
             except Exception as e:
                 logging.error(f'Failed to delete {file_path}. Reason: {e}')
     
-    async def replicate_file(self, host:str, username: str, password: str, file_locations: list[str], filename: str):
+    async def replicate_file(self, host:str, username: str, password: str, file_locations: List[str], filename: str):
         try:
             async with asyncssh.connect(host, username=username, password=password, known_hosts=None) as conn:
                 await asyncssh.scp((conn, SDFS_LOCATION + filename + "*"), SDFS_LOCATION)
+
             self.current_files[filename] = file_locations
             return True
         except (OSError, asyncssh.Error) as exc:

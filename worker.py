@@ -17,6 +17,7 @@ from election import Election
 from file_service import FileService
 from os import path
 import copy
+from typing import List
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -59,7 +60,7 @@ class Worker:
         
         self.io.testing = config.testing
     
-    async def replica_file(self, req_node: Node, replicas: list[dict]):
+    async def replica_file(self, req_node: Node, replicas: List[dict]):
         status = False
         filename = ""
         for replica in replicas:
@@ -223,7 +224,7 @@ class Worker:
                 if curr_node:
                     data: dict = packet.data
                     replicas = data["replicas"]
-                    logging.debug(f"request from {curr_node.host}:{curr_node.port} to replicate files from {machine_username}@{machine_hostname}:{machine_file_location}")
+                    logging.debug(f"request from {curr_node.host}:{curr_node.port} to replicate files")
                     asyncio.create_task(self.replica_file(req_node=curr_node, replicas=replicas))
             
             elif packet.type == PacketType.REPLICATE_FILE_SUCCESS:
@@ -548,7 +549,14 @@ class Worker:
         if self.leaderFlag:
             replication_dict = self.leaderObj.find_files_for_replication()
             print(replication_dict)
-            pass
+            for filename in replication_dict:
+                for node in replication_dict[filename]:
+                    downloading_node = Config.get_node_from_unique_name(node)
+                    await self.io.send(downloading_node.host, downloading_node.port, Packet(self.config.node.unique_name, PacketType.REPLICATE_FILE, {'replicas': replication_dict[filename][node]}).pack())
+                    self.leaderObj.create_new_status_for_file(filename, self.config.node, 'REPLICATE')
+            #     for replication_obj in replication_dict[filename]:
+            #         downloading_node = Config.get_node_from_unique_name(replication_obj['downloading_node'])
+            # pass
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
         # download latest file locally

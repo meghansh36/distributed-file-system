@@ -135,19 +135,26 @@ class Leader:
         replication_dict = {}
 
         for filename in file_dict:
+
+            if filename not in replication_dict.keys():
+                replication_dict[filename] = {}
+
             if len(file_dict[filename]) < 4:
                 new_nodes = self.find_replica_nodes(filename, 4 - len(file_dict[filename]), file_dict[filename])
 
                 for node in new_nodes:
                     print(node, filename)
-                    replication_obj = {
-                        'hostname': Config.get_node_from_unique_name(node).host,
-                        'file_paths': self.global_file_dict[file_dict[filename][0]][filename],
-                        'filename': filename
-                    }
-                    if filename in replication_dict.keys():
-                        replication_dict[filename].append(replication_obj)
-                    else:
-                        replication_dict[filename] = [replication_obj]
+                    if node not in replication_dict[filename].keys():
+                        replication_dict[filename][node] = []
+
+                    for current_alive_node in file_dict[filename]:
+                        replication_obj = {
+                            'hostname': Config.get_node_from_unique_name(current_alive_node).host,
+                            'file_paths': self.global_file_dict[file_dict[filename][0]][filename],
+                            'filename': filename,
+                        }
+                        
+                        replication_dict[filename][node].append(replication_obj)
+                    
 
         return replication_dict
