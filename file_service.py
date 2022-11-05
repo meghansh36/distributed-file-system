@@ -113,7 +113,7 @@ class FileService:
     async def download_file_to_dest(self, host: str, username: str, password: str, file_location: str, destination_file: str) -> None:  
         # file_location = "/Users/rahul/Q1.jpg"
         try:
-            async with asyncssh.connect(host, username=username, password=password) as conn:
+            async with asyncssh.connect(host, username=username, password=password, known_hosts=None) as conn:
                 await asyncssh.scp((conn, SDFS_LOCATION + file_location), destination_file)
             return True
         except (OSError, asyncssh.Error) as exc:
