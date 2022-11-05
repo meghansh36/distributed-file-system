@@ -26,7 +26,7 @@ async def run(config: Config) -> None:
 
 def parse_cmdline_args(arguments: List[str]) -> Config:
     """Parse cmdline options"""
-    hostname: str = '127.0.0.1'
+    hostname: str = 'fa22-cs425-6901.cs.illinois.edu'
     port: int = 8888
     conf: Optional[Config] = None
     introducer: str = None

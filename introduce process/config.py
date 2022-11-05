@@ -92,4 +92,4 @@ class Config:
     def __init__(self, hostname: str, port: int) -> None:
 
         self.node: Node = Node(hostname, port)
-        self.introducer = '127.0.0.1:8001'
+        self.introducer = 'fa22-cs425-6901.cs.illinois.edu:8000'
