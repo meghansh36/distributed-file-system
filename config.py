@@ -13,7 +13,14 @@ INTRODUCER_DNS_HOST = "127.0.0.1"
 INTRODUCER_DNS_PORT = 8888
 
 USERNAME = "meghansh"
-PASSWORD = "Toshiba@1234"
+PASSWORD = None
+
+with open('password.txt') as f:
+    line = f.readline()
+    PASSWORD = line.strip()
+    f.close()
+
+    
 
 H1: final = Node('127.0.0.1', 8001, USERNAME, PASSWORD, 'H1')
 H2: final = Node('127.0.0.1', 8002, USERNAME, PASSWORD, 'H2')
