@@ -19,7 +19,8 @@ PASSWORD = None
 
 with open('password.txt') as f:
     line = f.readline()
-    PASSWORD = line.strip()
+    USERNAME = line.split(',')[0].strip()
+    PASSWORD = line.split(',')[1].strip()
     f.close()
 
     
