@@ -50,14 +50,14 @@ class Worker:
             if (not packet) or (not self.is_current_node_active):
                 continue
 
-            logging.debug(f'got data: {packet.data} from {host}:{port}')
+            logging.debug(f'got data: {packet.data} from {packet.sender}')
 
             if packet.type == PacketType.FETCH_INTRODUCER:
-                print(f'{datetime.now()}: received ping from {host}:{port}')
+                print(f'{datetime.now()}: received ping from {packet.sender}')
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER_ACK, {'introducer': self.config.introducer}).pack())
 
             elif packet.type == PacketType.UPDATE_INTRODUCER:
-                self.config.introducer = host + ':' + str(port)
+                self.config.introducer = packet.sender
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.FETCH_INTRODUCER_ACK, {'introducer': self.config.introducer}).pack())
 
 

@@ -18,6 +18,7 @@ from file_service import FileService
 from os import path
 import copy
 from typing import List
+import random
 
 class Worker:
     """Main worker class to handle all the failure detection and sends PINGs and ACKs to other nodes"""
@@ -228,10 +229,30 @@ class Worker:
                     asyncio.create_task(self.replica_file(req_node=curr_node, replicas=replicas))
             
             elif packet.type == PacketType.REPLICATE_FILE_SUCCESS:
-                pass 
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    sdfsFileName = data['filename']
+                    all_files = data['all_files']
+                    # update status dict
+                    self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
+                    self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Success')
+                    print(f'{packet.sender} REPLICATED {sdfsFileName}')
+                    if self.leaderObj.check_if_request_completed(sdfsFileName):
+                        self.leaderObj.delete_status_for_file(sdfsFileName)
+                        print(f'REPLICATED {sdfsFileName} at all nodes')
 
             elif packet.type == PacketType.REPLICATE_FILE_FAIL:
-                pass
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    sdfsFileName = data['filename']
+                    all_files = data['all_files']
+                    # update status dict
+                    self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
+                    self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Failed')
+                    print(f'{packet.sender} NOT REPLICATED {sdfsFileName}')
+                    # self.leaderObj.delete_status_for_file(sdfsFileName)
 
             elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
@@ -259,6 +280,20 @@ class Worker:
                         original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
                         await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
                         self.leaderObj.delete_status_for_file(sdfsFileName)
+            
+            elif packet.type == PacketType.DOWNLOAD_FILE_FAIL:
+                curr_node: Node = Config.get_node_from_unique_name(packet.sender)
+                if curr_node:
+                    data: dict = packet.data
+                    sdfsFileName = data['filename']
+                    all_files = data['all_files']
+                    # update status dict
+                    self.leaderObj.merge_files_in_global_dict(all_files, packet.sender)
+                    self.leaderObj.update_replica_status(sdfsFileName, curr_node, 'Failed')
+                    if self.leaderObj.check_if_request_falied(sdfsFileName):
+                        original_requesting_node = self.leaderObj.status_dict[sdfsFileName]['request_node']
+                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_FAIL, {'filename': sdfsFileName}).pack())
+                        del self.leaderObj.status_dict[sdfsFileName]
             
             elif packet.type == PacketType.DELETE_FILE:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -296,7 +331,7 @@ class Worker:
                         await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_FAIL, {'filename': sdfsFileName, 'error': 'File upload already inprogress...'}).pack())
                     else:
                         download_nodes = self.leaderObj.find_nodes_to_put_file(sdfsFileName)
-                        self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'PUT')
+                        self.leaderObj.create_new_status_for_file(sdfsFileName, packet.data['file_path'], curr_node, 'PUT')
                         for node in download_nodes:
                             await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': host, 'file_path': packet.data['file_path'], 'filename': sdfsFileName}).pack())
                             self.leaderObj.add_replica_to_file(sdfsFileName, node)
@@ -313,7 +348,7 @@ class Worker:
                         if len(file_nodes) == 0:
                             await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_SUCCESS, {'filename': sdfsFileName}).pack())
                         else:
-                            self.leaderObj.create_new_status_for_file(sdfsFileName, curr_node, 'DELETE')
+                            self.leaderObj.create_new_status_for_file(sdfsFileName, '', curr_node, 'DELETE')
                             for node in file_nodes:
                                 await self.io.send(node.host, node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE, {'filename': sdfsFileName}).pack())
                                 self.leaderObj.add_replica_to_file(sdfsFileName, node)
@@ -534,12 +569,57 @@ class Worker:
         if self.leaderObj is not None and self.config.node.unique_name == self.leaderNode.unique_name:
             return True
         return False
+    
+    async def replace_files_downloading_by_node(self, node):
+
+        for file, file_dict in self.leaderObj.status_dict.items():
+
+            if file_dict['request_type'] == 'PUT':
+
+                if node == file_dict['request_node']:
+                    
+                    new_replicas = []
+                    for replica_node, download_status in file_dict['replicas'].items():
+                        if download_status == 'Success':
+                            new_replicas.append(replica_node)
+                    
+                    # TODO remove the entry from status file
+
+                    # if len(new_replicas) == 0:
+                    #     curr_node = Config.get_node_from_unique_name(file_dict['request_node'])
+                    #     await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_FAIL, {'filename': file, 'error': 'File upload failed as source node is down...'}).pack())
+                    #     continue
+                    
+                    # if node in file_dict['replicas']:
+                    #     # replace the node with new node and send request to download from new replicas
+                    #     pass
+                    # else:
+                    #     # resend download request to all failed nodes
+                    #     pass
+                else:
+                    if node in file_dict['replicas'] and file_dict['replicas'][node] != 'Success':
+                        running_nodes = set(list(self.globalObj.worker.membership_list.memberShipListDict.keys()))
+                        replica_nodes = set(list(file_dict['replicas'].keys()))
+                        possible_replica_nodes = list(running_nodes.difference(replica_nodes))
+                        if len(possible_replica_nodes) == 0:
+                            possible_replica_node = random.choice(possible_replica_nodes)
+                            await self.io.send(possible_replica_node.host, possible_replica_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE, {'hostname': file_dict['request_node'], 'file_path': file_dict['file_path'], 'filename': file}).pack())
+                            del self.leaderObj.status_dict[file]['replicas'][node]
+                            self.leaderObj.status_dict[file]['replicas'][possible_replica_node] = 'Waiting'
+            
+            elif file_dict['request_type'] == 'DELETE':
+                if node in file_dict['replicas']:
+                    # updating delete status as success as node rejoins it will clear all stored files
+                    self.leaderObj.update_replica_status(file, node, 'Success')
+                    if self.leaderObj.check_if_request_completed(file):
+                        original_requesting_node = self.leaderObj.status_dict[file]['request_node']
+                        await self.io.send(original_requesting_node.host, original_requesting_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST_SUCCESS, {'filename': file}).pack())
+                        self.leaderObj.delete_status_for_file(file)
 
     async def handle_failures_if_pending_status(self, node: str):
-        # TODO
         if self.leaderFlag:
             self.leaderObj.delete_node_from_global_dict(node)
-        pass
+            await self.replace_files_downloading_by_node(node)
 
     async def replicate_files(self):
         # TODO
@@ -553,7 +633,7 @@ class Worker:
                 for node in replication_dict[filename]:
                     downloading_node = Config.get_node_from_unique_name(node)
                     await self.io.send(downloading_node.host, downloading_node.port, Packet(self.config.node.unique_name, PacketType.REPLICATE_FILE, {'replicas': replication_dict[filename][node]}).pack())
-                    self.leaderObj.create_new_status_for_file(filename, self.config.node, 'REPLICATE')
+                    self.leaderObj.create_new_status_for_file(filename, '', self.config.node, 'REPLICATE')
             #     for replication_obj in replication_dict[filename]:
             #         downloading_node = Config.get_node_from_unique_name(replication_obj['downloading_node'])
             # pass
