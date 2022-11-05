@@ -3,7 +3,8 @@ import logging
 import os, shutil
 from typing import List
 
-SDFS_LOCATION = "/mnt/d/sdfs/" #"./sdfs/"
+# SDFS_LOCATION = "/mnt/d/sdfs/" #"./sdfs/"
+SDFS_LOCATION = '/home/bachina3/MP3/awesomesdfs/sdfs/'
 MAX_FILE_VERSIONS = 5
 
 CLEANUP_ON_STARTUP = True
