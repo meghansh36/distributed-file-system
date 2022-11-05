@@ -43,6 +43,16 @@ class FileService:
                     shutil.rmtree(file_path)
             except Exception as e:
                 logging.error(f'Failed to delete {file_path}. Reason: {e}')
+    
+    async def replicate_file(self, host:str, username: str, password: str, file_locations: list[str], filename: str):
+        try:
+            async with asyncssh.connect(host, username=username, password=password, known_hosts=None) as conn:
+                await asyncssh.scp((conn, SDFS_LOCATION + filename + "*"), SDFS_LOCATION)
+            self.current_files[filename] = file_locations
+            return True
+        except (OSError, asyncssh.Error) as exc:
+            logging.error(f'Failed to replicate file {filename} from {host}: {str(exc)}')
+            return False
 
     async def download_file(self, host: str, username: str, password: str, file_location: str, filename: str) -> None:  
         destination_file = ""
@@ -86,7 +96,10 @@ class FileService:
         if sdfsfilename in self.current_files:
             files = self.current_files[sdfsfilename]
             for file in files:
-                os.remove(SDFS_LOCATION + file)
+                try:
+                    os.remove(SDFS_LOCATION + file)
+                except FileNotFoundError:
+                    print(f"FileNotFoundError: {file}")
             del self.current_files[sdfsfilename]
             deleted = True
         return deleted
