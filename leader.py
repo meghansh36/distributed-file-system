@@ -17,6 +17,9 @@ class Leader:
 
         self.global_file_dict: dict = {}
         self.status_dict: dict = {}
+
+    def delete_node_from_global_dict(self, node):
+        del self.global_file_dict[node]
     
     def merge_files_in_global_dict(self, files_in_node, sender):
 
@@ -55,13 +58,30 @@ class Leader:
             node_id_set = set()
             while len(node_id_set) < 4:
                 val += int(random() * 100)
-                id = (val % len(self.globalObj.worker.membership_list.memberShipListDict)) + 1
-                node_id_set.add(id)
+                id = (val % 10) + 1
+                node = Config.get_node_from_id('H'+str(id)).unique_name
+                if node in self.globalObj.worker.membership_list.memberShipListDict.keys():
+                    node_id_set.add(id)
             
             for id in node_id_set:
                 nodes.append(Config.get_node_from_id('H'+str(id)))
 
         return nodes
+
+    def find_replica_nodes(self, sdfsFileName, num_replicas, current_replicas):
+        nodes = []
+        hashObj = hashlib.sha256(sdfsFileName.encode('utf-8'))
+        val = int.from_bytes(hashObj.digest(), 'big')
+
+        node_set = set()
+        while len(node_set) < num_replicas:
+            val += int(random() * 100)
+            id = (val % 10) + 1
+            node  = Config.get_node_from_id('H'+str(id)).unique_name
+            if node not in current_replicas and node in self.globalObj.worker.membership_list.memberShipListDict.keys():
+                node_set.add(node)
+        
+        return list(node_set)
     
     def is_file_upload_inprogress(self, sdfsFileName):
         return sdfsFileName in self.status_dict
@@ -101,3 +121,33 @@ class Leader:
 
     def delete_status_for_file(self, sdfsFileName: str):
         del self.status_dict[sdfsFileName]
+
+    def find_files_for_replication(self):
+        file_dict = {}
+        
+        for node in self.global_file_dict:
+            for filename in self.global_file_dict[node]:
+                if filename in file_dict.keys():
+                    file_dict[filename].append(node)
+                else:
+                    file_dict[filename] = [node]
+        
+        replication_dict = {}
+
+        for filename in file_dict:
+            if len(file_dict[filename]) < 4:
+                new_nodes = self.find_replica_nodes(filename, 4 - len(file_dict[filename]), file_dict[filename])
+
+                for node in new_nodes:
+                    print(node, filename)
+                    replication_obj = {
+                        'hostname': Config.get_node_from_unique_name(node).host,
+                        'file_paths': self.global_file_dict[file_dict[filename][0]][filename],
+                        'filename': filename
+                    }
+                    if filename in replication_dict.keys():
+                        replication_dict[filename].append(replication_obj)
+                    else:
+                        replication_dict[filename] = [replication_obj]
+
+        return replication_dict

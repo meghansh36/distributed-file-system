@@ -497,9 +497,10 @@ class Worker:
             return True
         return False
 
-    def handle_failures_if_pending_status(self):
+    async def handle_failures_if_pending_status(self, node: str):
         # TODO
-        
+        if self.leaderFlag:
+            self.leaderObj.delete_node_from_global_dict(node)
         pass
 
     async def replicate_files(self):
@@ -507,7 +508,10 @@ class Worker:
         # leader node will find out the unique files in the system.
         # for each unique file, find the array of nodes
         # if file doesnt have 4 nodes, choose the missing number of nodes randomly
-        pass
+        if self.leaderFlag:
+            replication_dict = self.leaderObj.find_files_for_replication()
+            print(replication_dict)
+            pass
 
     async def get_file_locally(self, machineids_with_filenames, sdfsfilename, localfilename, file_count=1):
         # download latest file locally
