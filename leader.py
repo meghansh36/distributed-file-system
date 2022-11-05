@@ -100,21 +100,33 @@ class Leader:
                 machineids_filenames[machineid] = machine_file_dict[sdfsFileName]
         return machineids_filenames
 
-    def create_new_status_for_file(self, filename: str, requestingNode: Node, request_type: str):
+    def create_new_status_for_file(self, filename: str, filepath:str, requestingNode: Node, request_type: str):
         self.status_dict[filename] = {
             'request_type': request_type,
+            'file_path': filepath,
             'request_node': requestingNode,
             'replicas': {}
         }
 
     def check_if_request_completed(self, filename):
-        for key, item in self.status_dict[filename]['replicas'].items():
-            if item != 'Success':
-                return False
-        return True
+        if filename in self.status_dict:
+            for key, item in self.status_dict[filename]['replicas'].items():
+                if item != 'Success':
+                    return False
+            return True
+        return False
+    
+    def check_if_request_falied(self, filename):
+        if filename in self.status_dict:
+            for key, item in self.status_dict[filename]['replicas'].items():
+                if item != 'Falied':
+                    return False
+            return True
+        return False
     
     def update_replica_status(self, sdfsFileName:str, replicaNode: Node, status: str):
-        self.status_dict[sdfsFileName]['replicas'][replicaNode.unique_name] = status
+        if sdfsFileName in self.status_dict and replicaNode.unique_name in self.status_dict[sdfsFileName]['replicas']:
+            self.status_dict[sdfsFileName]['replicas'][replicaNode.unique_name] = status
     
     def add_replica_to_file(self, sdfsFileName: str, replicaNode: Node):
         self.status_dict[sdfsFileName]['replicas'][replicaNode.unique_name] = 'Waiting'
@@ -156,5 +168,4 @@ class Leader:
                         
                         replication_dict[filename][node].append(replication_obj)
                     
-
         return replication_dict
