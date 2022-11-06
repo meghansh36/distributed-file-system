@@ -205,8 +205,8 @@ class Worker:
             
             elif packet.type == PacketType.COORDINATE:
                 self.globalObj.election.electionPhase = False
-                self.leaderNode = Config.get_node_from_unique_name(host + ":" + f'{port}')
-                print('MY NEW LEADER IS', host, port)
+                self.leaderNode = Config.get_node_from_unique_name(packet.sender)
+                print('MY NEW LEADER IS', packet.sender)
                 response = {'all_files': self.file_service.current_files}
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, response).pack())
             
