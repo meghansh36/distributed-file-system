@@ -179,6 +179,7 @@ class Worker:
                     self.leaderNode = self.config.node
                     self.waiting_for_introduction = False
                     self.leaderObj.global_file_dict = copy.deepcopy(self.temporary_file_dict)
+                    self.leaderObj.global_file_dict[self.config.node.unique_name] = self.file_service.current_files
                     self.temporary_file_dict = {}
                     print("I BECAME THE LEADER ", self.leaderNode.unique_name)
                 else:
