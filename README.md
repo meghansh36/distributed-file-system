@@ -84,7 +84,7 @@ Start the introducer process.
 
 ```console
 $ cd ~/awesomesdfs/introduce\ process/
-$ python3 main.py'
+$ python3 main.py --hostname="127.0.0.1" --port=8888
 ```
 
 The introduces will run on port 8888.
