@@ -10,6 +10,7 @@ MAX_FILE_VERSIONS = 5
 CLEANUP_ON_STARTUP = True
 
 class FileService:
+    """Service to handle all file ops and scp commands"""
 
     def __init__(self) -> None:
         self.current_files = {}

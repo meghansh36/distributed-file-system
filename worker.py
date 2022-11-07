@@ -62,6 +62,7 @@ class Worker:
         self.io.testing = config.testing
     
     async def replica_file(self, req_node: Node, replicas: List[dict]):
+        """Function to replicate files from other nodes. This function initiates a scp command to transfer the files and is run when leader sends the REPLICATE packet""""
         status = False
         filename = ""
         for replica in replicas:
@@ -85,6 +86,7 @@ class Worker:
 
 
     async def put_file(self, req_node: Node, host, username, password, file_location, filename):
+        """Function to download file from the client node. This function initiates a scp command to transfer the files and is run when leader sends the DOWNLOAD packet"""
         status = await self.file_service.download_file(host=host, username=username, password=password, file_location=file_location, filename=filename)
         if status:
             logging.info(f'successfully downloaded file {file_location} from {host} requested by {req_node.unique_name}')
@@ -98,6 +100,8 @@ class Worker:
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DOWNLOAD_FILE_FAIL, response).pack())
     
     async def delete_file(self, req_node, filename):
+        """Function to delete file on the node. Itis run when leader sends the DELETE packet"""
+
         logging.debug(f"request from {req_node.host}:{req_node.port} to delete file {filename}")
         status = self.file_service.delete_file(filename)
         if status:
@@ -110,6 +114,8 @@ class Worker:
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_NAK, response).pack())
 
     async def get_file(self, req_node, filename):
+        """Function to get files from other nodes. This function initiates a scp command to transfer the files and is run on the client once the leader sends it info of the replicas"""
+
         logging.debug(f"request from {req_node.host}:{req_node.port} to get file {filename}")
         response = self.file_service.get_file_details(filename)
         if "latest_file" in response:
@@ -120,6 +126,7 @@ class Worker:
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.GET_FILE_ACK, response).pack())
 
     def display_machineids_for_file(self, sdfsfilename, machineids):
+        """Function to pretty print replica info for the LS command"""
         output = f"File {sdfsfilename} found in {len(machineids)} machines:\n"
         for recv_machineid in machineids:
             output += f"{recv_machineid}\n"
@@ -152,6 +159,7 @@ class Worker:
             logging.debug(f'got data: {packet.data} from {host}:{port}')
 
             if packet.type == PacketType.ACK or packet.type == PacketType.INTRODUCE_ACK:
+                """Instructions to execute when the node receives failure detector ACKs or ACKs from the introducer"""
                 curr_node: Node = Config.get_node_from_unique_name(
                     packet.sender)
                 logging.debug(f'got ack from {curr_node.unique_name}')
@@ -170,6 +178,7 @@ class Worker:
                     self._notify_waiting(curr_node)
 
             elif packet.type == PacketType.FETCH_INTRODUCER_ACK:
+                """Instructions to execute once the node receives the introducer information from the Introducer DNS process"""
                 logging.debug(f'got fetch introducer ack from {self.config.introducerDNSNode.unique_name}')
                 introducer = packet.data['introducer']
                 if introducer == self.config.node.unique_name:
@@ -181,10 +190,10 @@ class Worker:
                     self.leaderObj.global_file_dict = copy.deepcopy(self.temporary_file_dict)
                     self.leaderObj.global_file_dict[self.config.node.unique_name] = self.file_service.current_files
                     self.temporary_file_dict = {}
-                    print("I BECAME THE LEADER ", self.leaderNode.unique_name)
+                    logging.info(f"I BECAME THE LEADER {self.leaderNode.unique_name}")
                 else:
                     self.leaderNode = Config.get_node_from_unique_name(introducer)
-                    print("MY NEW LEADER IS", self.leaderNode.unique_name)
+                    logging.info(f"MY NEW LEADER IS {self.leaderNode.unique_name}")
 
                 self.fetchingIntroducerFlag = False
                 self._notify_waiting(self.config.introducerDNSNode)
@@ -195,19 +204,20 @@ class Worker:
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.ACK, self.membership_list.get()).pack())
 
             elif packet.type == PacketType.ELECTION:
-                print('I GOT AN ELECTION PACKET')
+                """Instructions to execute when node receives the election packet. If it has not started its own election then its starts it. If election is already going on, it checks if it itself is the leader using the full membership list. If new leader, then send the coordinate message"""
+
+                logging(f'{self.config.node.unique_name}  GOT AN ELECTION PACKET')
                 if not self.globalObj.election.electionPhase:
-                    print('STARTING MY OWN ELECTIONNNN')
                     self.globalObj.election.initiate_election()
                 else:
-                    print('I will check if i am leader or not')
                     if self.globalObj.election.check_if_leader():
                         await self.send_coordinator_message()
             
             elif packet.type == PacketType.COORDINATE:
+                """Instructions to execute when a node receives the COORDINATE message from the new leader"""
                 self.globalObj.election.electionPhase = False
                 self.leaderNode = Config.get_node_from_unique_name(packet.sender)
-                print('MY NEW LEADER IS', packet.sender)
+                logging.info(f'{self.config.node.unique_name} NEW LEADER IS f{packet.sender}')
                 response = {'all_files': self.file_service.current_files}
                 await self.io.send(host, port, Packet(self.config.node.unique_name, PacketType.COORDINATE_ACK, response).pack())
             
@@ -218,10 +228,11 @@ class Worker:
                 # self.leaderObj.merge_files_in_global_dict(files_in_node, host, port)
 
                 if self.globalObj.election.coordinate_ack == len(self.membership_list.memberShipListDict.keys()) - 1:
-                    print('I AM THE NEW LEADER NOWWWWWWWWW')
+                    logging.info(f'{self.config.node.unique_name} IS THE NEW LEADER NOW')
                     await self.update_introducer()
             
             elif packet.type == PacketType.REPLICATE_FILE:
+                """Handle REPLICATE request from the leader"""
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
@@ -230,6 +241,7 @@ class Worker:
                     asyncio.create_task(self.replica_file(req_node=curr_node, replicas=replicas))
             
             elif packet.type == PacketType.REPLICATE_FILE_SUCCESS:
+                """Handle the Replicate success messages from the replicas. This request is only handled by the leader"""
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
@@ -243,8 +255,8 @@ class Worker:
                         self.leaderObj.delete_status_for_file(sdfsFileName)
                         print(f'REPLICATED {sdfsFileName} at all nodes: in {time() - self.replicate_start_time} seconds')
 
-
             elif packet.type == PacketType.REPLICATE_FILE_FAIL:
+
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
@@ -258,6 +270,7 @@ class Worker:
 
             elif packet.type == PacketType.DOWNLOAD_FILE:
                 # parse packet and get all the required fields to download a file
+                """Handle Download request from the leader"""
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
@@ -270,6 +283,8 @@ class Worker:
                     asyncio.create_task(self.put_file(curr_node, machine_hostname, machine_username, machine_password, machine_file_location, machine_filename))
 
             elif packet.type == PacketType.DOWNLOAD_FILE_SUCCESS:
+                """INstructions for the leader to handle the download file success messages. The leader updates the status of the file in and notifies the client that the file has been uploaded successfully if Success is received from all 4 replicas"""
+
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     data: dict = packet.data
@@ -326,6 +341,7 @@ class Worker:
                     self.get_file(curr_node, machine_filename)
 
             elif packet.type == PacketType.PUT_REQUEST:
+                """Instructions to handle the PUT request from the client. This request is handled by the leader. It finds 4 random replicas for the file, sends download command to them and tracks their status"""
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     sdfsFileName = packet.data['filename']
@@ -340,6 +356,7 @@ class Worker:
                         await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_ACK, {'filename': sdfsFileName}).pack())
 
             elif packet.type == PacketType.DELETE_FILE_REQUEST:
+                """Instructions for the leader to handle the delete request from the client. It finds the replicas for that file and sends the delete command to them It also tracks their status"""
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
                 if curr_node:
                     sdfsFileName = packet.data['filename']
@@ -514,6 +531,7 @@ class Worker:
         await self._wait(node, PING_TIMEOOUT)
 
     async def send_election_messages(self):
+        """function to keep sending election message while the election phase is in progress"""
         while True:
             if self.globalObj.election.electionPhase:
                 for node in self.membership_list.current_pinging_nodes:
@@ -523,6 +541,7 @@ class Worker:
             await asyncio.sleep(PING_DURATION)
     
     async def send_coordinator_message(self):
+        """Multicast coordinate messages if the current node has the highest id in the election phase"""
         self.temporary_file_dict = {}
         online_nodes = self.membership_list.get_online_nodes()
 
@@ -541,33 +560,40 @@ class Worker:
                         asyncio.create_task(self.check(node))
                 else:
                     self.total_pings_send += 1
-                    print(self.fetchingIntroducerFlag)
+                    # print(self.fetchingIntroducerFlag)
                     if self.fetchingIntroducerFlag:
                         asyncio.create_task(self.fetch_introducer())
-                    print(self.waiting_for_introduction, self.fetchingIntroducerFlag)
+                    # print(self.waiting_for_introduction, self.fetchingIntroducerFlag)
                     if self.waiting_for_introduction and not self.fetchingIntroducerFlag:
-                        print('i entered here now')
+                        # print('i entered here now')
                         asyncio.create_task(self.introduce())
 
             await asyncio.sleep(PING_DURATION)
 
     async def send_put_request_to_leader(self, localFileName, sdfsFileName):
+        """function to send the PUT request to the leader from the client"""
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST, {'file_path': localFileName, 'filename': sdfsFileName}).pack())
         await self._wait_for_leader(20)
 
     async def send_del_request_to_leader(self, sdfsFileName):
+        """function to send the DELETE request to the leader from the client"""
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.DELETE_FILE_REQUEST, {'filename': sdfsFileName}).pack())
         await self._wait_for_leader(20)
 
     async def send_ls_request_to_leader(self, sdfsfilename):
+        """function to send the LS request to the leader from the client"""
+
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.LIST_FILE_REQUEST, {'filename': sdfsfilename}).pack())
         await self._wait_for_leader(20)
     
     async def send_get_file_request_to_leader(self, sdfsfilename):
+        """function to send the GET request to the leader from the client"""
+
         await self.io.send(self.leaderNode.host, self.leaderNode.port, Packet(self.config.node.unique_name, PacketType.GET_FILE_REQUEST, {'filename': sdfsfilename}).pack())
         await self._wait_for_leader(20)
 
     def isCurrentNodeLeader(self):
+        """Function to check if this node is the leader"""
         if self.leaderObj is not None and self.config.node.unique_name == self.leaderNode.unique_name:
             return True
         return False
@@ -584,20 +610,6 @@ class Worker:
                     for replica_node, download_status in file_dict['replicas'].items():
                         if download_status == 'Success':
                             new_replicas.append(replica_node)
-                    
-                    # TODO remove the entry from status file
-
-                    # if len(new_replicas) == 0:
-                    #     curr_node = Config.get_node_from_unique_name(file_dict['request_node'])
-                    #     await self.io.send(curr_node.host, curr_node.port, Packet(self.config.node.unique_name, PacketType.PUT_REQUEST_FAIL, {'filename': file, 'error': 'File upload failed as source node is down...'}).pack())
-                    #     continue
-                    
-                    # if node in file_dict['replicas']:
-                    #     # replace the node with new node and send request to download from new replicas
-                    #     pass
-                    # else:
-                    #     # resend download request to all failed nodes
-                    #     pass
                 else:
                     if node in file_dict['replicas'] and file_dict['replicas'][node] != 'Success':
                         running_nodes = set(list(self.globalObj.worker.membership_list.memberShipListDict.keys()))
@@ -624,10 +636,7 @@ class Worker:
             await self.replace_files_downloading_by_node(node)
 
     async def replicate_files(self):
-        # TODO
-        # leader node will find out the unique files in the system.
-        # for each unique file, find the array of nodes
-        # if file doesnt have 4 nodes, choose the missing number of nodes randomly
+        """Function to replicate the files once 3 failures are detected"""
         if self.leaderFlag:
             replication_dict = self.leaderObj.find_files_for_replication()
             print(replication_dict)
@@ -752,9 +761,7 @@ class Worker:
                     if len(options) != 3:
                         print('invalid options for put command.')
                         continue
-                    
                     start_time = time()
-                    
                     localfilename = options[1]
                     if not path.exists(localfilename):
                         print('invalid localfilename for put command.')
@@ -768,7 +775,6 @@ class Worker:
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event = None
-
                     print(f"PUT runtime: {time() - start_time} seconds")
                     
 
@@ -776,9 +782,7 @@ class Worker:
                     if len(options) != 3:
                         print('invalid options for get command.')
                         continue
-
                     start_time = time()
-
                     sdfsfilename = options[1]
                     localfilename = options[2]
                     if self.isCurrentNodeLeader():
@@ -802,9 +806,7 @@ class Worker:
                     if len(options) != 2:
                         print('invalid options for delete command.')
                         continue
-                        
                     start_time = time()
-
                     sdfsfilename = options[1]
                     await self.send_del_request_to_leader(sdfsfilename)
 
@@ -813,16 +815,13 @@ class Worker:
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event = None
-
                     print(f"DELETE runtime: {time() - start_time} seconds")
-                
+                    
                 elif cmd == "ls": # list all the
                     if len(options) != 2:
                         print('invalid options for ls command.')
                         continue
-
                     start_time = time()
-
                     sdfsfilename = options[1]
                     if self.isCurrentNodeLeader():
                         machineids = self.leaderObj.get_machineids_for_file(sdfsfilename)
@@ -831,9 +830,8 @@ class Worker:
                         await self.send_ls_request_to_leader(sdfsfilename)
                         del self._waiting_for_leader_event
                         self._waiting_for_leader_event = None
-                    
                     print(f"LS runtime: {time() - start_time} seconds")
-
+        
                 elif cmd == "store": # store
                     self.file_service.list_all_files()
 
@@ -841,9 +839,7 @@ class Worker:
                     if len(options) != 4:
                         print('invalid options for get-versions command.')
                         continue
-
                     start_time = time()
-
                     sdfsfilename = options[1]
                     numversions = int(options[2])
                     localfilename = options[3]
@@ -862,7 +858,6 @@ class Worker:
 
                         del self._waiting_for_leader_event
                         self._waiting_for_leader_event = None
-                    
                     print(f"GET-VERSIONS runtime: {time() - start_time} seconds")
 
                 else:

@@ -1,6 +1,7 @@
 from globalClass import Global
 import asyncio
 from config import Config
+import logging
 
 class Election:
 
@@ -12,13 +13,15 @@ class Election:
         self.coordinate_ack = 0
 
     def initiate_election(self):
+        """function to initiate the election phase"""
         self.electionPhase = True
         self.globalObj.worker.leaderNode = None
-        print('ELECTION INITIATEDDDD')
+        logging.info(f'ELECTION INITIATED by {self.globalObj.worker.config.node.unique_name}')
         # while self.electionPhase:
         #     asyncio.gather(self.globalObj.worker.send_election_messages())
     
     def check_if_leader(self):
+        """Function to check if the current node has the highest ID"""
         node = self.globalObj.worker.config.node
         my_id = int(node.name.strip('H'))
         print('my id is', my_id)
