@@ -62,7 +62,7 @@ class Worker:
         self.io.testing = config.testing
     
     async def replica_file(self, req_node: Node, replicas: List[dict]):
-        """Function to replicate files from other nodes. This function initiates a scp command to transfer the files and is run when leader sends the REPLICATE packet""""
+        """Function to replicate files from other nodes. This function initiates a scp command to transfer the files and is run when leader sends the REPLICATE packet"""
         status = False
         filename = ""
         for replica in replicas:
