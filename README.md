@@ -2,6 +2,8 @@
 
 Awesome SDFS is a Simple Distributed File System that handles large data sets and provides a CLI interface to PUT/GET/DELETE/UPDATE and LIST files in the system. SDFS is built with a SWIM like failure detector with configurable failure detection parameters and can handle 4 failures at a time by replicating each file at 4 nodes and supports re-replication when it detects 3 node failures making it highly fault-tolerant. The SDFs arranges nodes in a virtual ring and maintains full membership list and configures its topology on 3 failures and uses consistant hashing to find the node to store a file. The SDFS uses a leader node to cordinate all the file based operations and has a basic leader election protocol running in the background to elect a new leader on failure. SDFS also uses a DNS process to allow new nodes to know about current leader.
 
+SDFS uses scp internally to download files from a host. The username and password for host should be provided using `password.txt` file with `username,password` format.
+
 ## Usage
 
 ### STEP-1

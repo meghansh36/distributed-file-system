@@ -84,7 +84,6 @@ class Worker:
             response = {"filename": filename, "all_files": self.file_service.current_files}
             await self.io.send(req_node.host, req_node.port, Packet(self.config.node.unique_name, PacketType.REPLICATE_FILE_FAIL, response).pack())
 
-
     async def put_file(self, req_node: Node, host, username, password, file_location, filename):
         """Function to download file from the client node. This function initiates a scp command to transfer the files and is run when leader sends the DOWNLOAD packet"""
         status = await self.file_service.download_file(host=host, username=username, password=password, file_location=file_location, filename=filename)
