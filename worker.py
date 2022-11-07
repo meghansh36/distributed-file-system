@@ -241,7 +241,8 @@ class Worker:
                     print(f'{packet.sender} REPLICATED {sdfsFileName}')
                     if self.leaderObj.check_if_request_completed(sdfsFileName):
                         self.leaderObj.delete_status_for_file(sdfsFileName)
-                        print(f'REPLICATED {sdfsFileName} at all nodes')
+                        print(f'REPLICATED {sdfsFileName} at all nodes: in {time() - self.replicate_start_time} seconds')
+
 
             elif packet.type == PacketType.REPLICATE_FILE_FAIL:
                 curr_node: Node = Config.get_node_from_unique_name(packet.sender)
@@ -630,6 +631,7 @@ class Worker:
         if self.leaderFlag:
             replication_dict = self.leaderObj.find_files_for_replication()
             print(replication_dict)
+            self.replicate_start_time = time()
             for filename in replication_dict:
                 for node in replication_dict[filename]:
                     downloading_node = Config.get_node_from_unique_name(node)
@@ -751,6 +753,8 @@ class Worker:
                         print('invalid options for put command.')
                         continue
                     
+                    start_time = time()
+                    
                     localfilename = options[1]
                     if not path.exists(localfilename):
                         print('invalid localfilename for put command.')
@@ -764,12 +768,16 @@ class Worker:
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event = None
+
+                    print(f"PUT runtime: {time() - start_time} seconds")
                     
 
                 elif cmd == "get": # GET file
                     if len(options) != 3:
                         print('invalid options for get command.')
                         continue
+
+                    start_time = time()
 
                     sdfsfilename = options[1]
                     localfilename = options[2]
@@ -787,12 +795,15 @@ class Worker:
 
                         del self._waiting_for_leader_event
                         self._waiting_for_leader_event = None
-                        print("get: done!!!")
+
+                    print(f"GET runtime: {time() - start_time} seconds")
 
                 elif cmd == "delete": # DEL file
                     if len(options) != 2:
                         print('invalid options for delete command.')
                         continue
+                        
+                    start_time = time()
 
                     sdfsfilename = options[1]
                     await self.send_del_request_to_leader(sdfsfilename)
@@ -802,11 +813,15 @@ class Worker:
                     await asyncio.wait([self._waiting_for_second_leader_event.wait()])
                     del self._waiting_for_second_leader_event
                     self._waiting_for_second_leader_event = None
+
+                    print(f"DELETE runtime: {time() - start_time} seconds")
                 
                 elif cmd == "ls": # list all the
                     if len(options) != 2:
                         print('invalid options for ls command.')
                         continue
+
+                    start_time = time()
 
                     sdfsfilename = options[1]
                     if self.isCurrentNodeLeader():
@@ -816,6 +831,8 @@ class Worker:
                         await self.send_ls_request_to_leader(sdfsfilename)
                         del self._waiting_for_leader_event
                         self._waiting_for_leader_event = None
+                    
+                    print(f"LS runtime: {time() - start_time} seconds")
 
                 elif cmd == "store": # store
                     self.file_service.list_all_files()
@@ -824,6 +841,8 @@ class Worker:
                     if len(options) != 4:
                         print('invalid options for get-versions command.')
                         continue
+
+                    start_time = time()
 
                     sdfsfilename = options[1]
                     numversions = int(options[2])
@@ -843,7 +862,8 @@ class Worker:
 
                         del self._waiting_for_leader_event
                         self._waiting_for_leader_event = None
-                        print("get-versions: done!!!")
+                    
+                    print(f"GET-VERSIONS runtime: {time() - start_time} seconds")
 
                 else:
                     print('invalid option.')
